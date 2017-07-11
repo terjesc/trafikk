@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include "startup_sound.h"
 
 #include "controller.h"
 #include "controlleruser.h"
@@ -190,6 +191,8 @@ int main()
   
   std::cout << "Hello, world!" << std::endl;
   std::srand(std::time(NULL));
+
+  playStartupSound();
  
   Controller controller;
   controller.registerTickType(0);
