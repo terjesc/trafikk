@@ -185,10 +185,6 @@ int main()
       "Trafikk",
       sf::Style::Default);
 
-  sf::CircleShape shape(100.f);
-  shape.setFillColor(sf::Color::Green);
-
-
   std::cout << "Hello, world!" << std::endl;
   std::srand(std::time(NULL));
  
@@ -239,7 +235,6 @@ int main()
     controller.tick();
 
     window.clear(sf::Color::Black);
-    window.draw(shape);
 
     // TODO: Draw line.
     // Line
