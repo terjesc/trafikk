@@ -55,7 +55,6 @@ class Line : public ControllerUser
     {
       int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
       totalNumberOfVehicles += numberOfVehicles;
-//      VehicleInfo vi = {100, 150};
       std::vector<VehicleInfo> v;
       for (int i = 0; i < numberOfVehicles; ++i)
       {
@@ -64,13 +63,6 @@ class Line : public ControllerUser
         VehicleInfo vi = {vehicleSpeed, vehiclePosition};
         v.push_back(vi);
       }
-/*      v.push_back(vi);
-      vi.speed = 110;
-      vi.position = 50;
-      v.push_back(vi);
-      vi.speed = 90;
-      vi.position = 500;
-      v.push_back(vi);*/
       _vehicles.initialize(v);
       m_out.push_back(this);
       m_in.push_back(this);
@@ -135,12 +127,10 @@ class Line : public ControllerUser
       // Fetch all incoming vehicles from inbox
       // FIXME: Terminology: "Inbox" is used both for single inbox (it_inbox)
       //        and map of all inboxes (m_vehicleInbox).
-//      std::cout << "\tS:" << m_vehicleInbox.size();
       for (std::map<int, std::vector<VehicleInfo> >::iterator it_inbox
             = m_vehicleInbox.begin();
           it_inbox != m_vehicleInbox.end(); ++it_inbox)
       {
-//        std::cout << "s:" << it_inbox->second.size();
         for (std::vector<VehicleInfo>::iterator it_element = it_inbox->second.begin();
             it_element != it_inbox->second.end(); ++it_element)
         {
@@ -194,9 +184,8 @@ int main()
 
   Line line(&controller);
 
-//  const int NUMBER_OF_ADDITIONAL_LINES = 32768; // max. road pieces in C:S
-  const int NUMBER_OF_ADDITIONAL_LINES = 16384; // Just a random count
-//  const int NUMBER_OF_ADDITIONAL_LINES =   0;
+  // For reference, Cities Skylines has a maximum of 32768 road segments
+  const int NUMBER_OF_ADDITIONAL_LINES = 16384;
 
   Line *lines[NUMBER_OF_ADDITIONAL_LINES];
   for (int i = 0; i < NUMBER_OF_ADDITIONAL_LINES; ++i)
@@ -206,11 +195,6 @@ int main()
 
   std::cout << "Total number of vehicles: "
     << totalNumberOfVehicles << std::endl;
-
-  const int NUMBER_OF_TICKS = 60; // one minute worth of seconds
-//  const int NUMBER_OF_TICKS = 600; // ten minutes worth of seconds
-//  const int NUMBER_OF_TICKS = 60 * 60; // one hour worth of seconds
-//  const int NUMBER_OF_TICKS = 60 * 60 * 24; // 24 hours worth of seconds
 
   line.print();
 
@@ -236,8 +220,7 @@ int main()
 
     window.clear(sf::Color::Black);
 
-    // TODO: Draw line.
-    // Line
+    // Draw line
     sf::Vertex lineline[] =
       {
       sf::Vertex(sf::Vector2f(10, 10)),
@@ -245,14 +228,14 @@ int main()
     };
     window.draw(lineline, 2, sf::Lines);
       
-    // Vehicles
+    // Draw vehicles on line
     sf::CircleShape marker(5);
     std::vector<VehicleInfo> linevehicles = line.getVehicles();
     for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
         it != linevehicles.cend(); ++it)
     {
-      // TODO draw vehicles
-      marker.setPosition(10 + (it->position / 10), 10);
+      // Draw vehicles
+      marker.setPosition(10/2 + (it->position / 10), 10/2);
       window.draw(marker);
     }
 
@@ -260,18 +243,12 @@ int main()
     int linesToDraw = std::min(NUMBER_OF_ADDITIONAL_LINES, 10);
     for (int i = 0; i < linesToDraw; ++i)
     {
-      // TODO: Draw lines[i]
+      // TODO Draw lines[i]
     }
 
     window.display();
   }
 
-/*
-  for (int i = 0; i < NUMBER_OF_TICKS; ++i)
-  {
-    controller.tick();
-//    line.print();
-  }*/
   line.print();
 
   for (int i = 0; i < NUMBER_OF_ADDITIONAL_LINES; ++i)
