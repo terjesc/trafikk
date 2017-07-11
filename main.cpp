@@ -15,11 +15,13 @@
 
 const int SPEED = 50;
 const int SAFE_DISTANCE = 500;
-const int LINE_LENGTH = 5000;
+const int LINE_LENGTH = 10000;
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
 
-int totalNumberOfVehicles = 0;
+const bool LIMIT_FRAMERATE = false;
+
+static int totalNumberOfVehicles = 0;
 
 struct Blocker
 {
@@ -175,6 +177,17 @@ int main()
       "Trafikk",
       sf::Style::Default);
 
+  // Framerate and sync settings
+  if (LIMIT_FRAMERATE)
+  {
+    window.setVerticalSyncEnabled(false);
+    window.setFramerateLimit(60);
+  }
+  else
+  {
+    window.setVerticalSyncEnabled(true);
+  }
+  
   std::cout << "Hello, world!" << std::endl;
   std::srand(std::time(NULL));
  
@@ -222,28 +235,49 @@ int main()
 
     // Draw line
     sf::Vertex lineline[] =
-      {
+    {
       sf::Vertex(sf::Vector2f(10, 10)),
-      sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 10), 10))
+      sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 25), 10))
     };
     window.draw(lineline, 2, sf::Lines);
       
     // Draw vehicles on line
-    sf::CircleShape marker(5);
+    const int MARKER_RADIUS = 5;
+    sf::CircleShape marker(MARKER_RADIUS);
+
+    // Draw vehicles
     std::vector<VehicleInfo> linevehicles = line.getVehicles();
     for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
         it != linevehicles.cend(); ++it)
     {
-      // Draw vehicles
-      marker.setPosition(10/2 + (it->position / 10), 10/2);
+      marker.setPosition(MARKER_RADIUS + (it->position / 25), MARKER_RADIUS);
       window.draw(marker);
     }
 
 
-    int linesToDraw = std::min(NUMBER_OF_ADDITIONAL_LINES, 10);
+    // Draw some more lines
+    int linesToDraw = std::min(NUMBER_OF_ADDITIONAL_LINES, 50);
     for (int i = 0; i < linesToDraw; ++i)
     {
-      // TODO Draw lines[i]
+      int yCoordinate = (2 * (i + 2) * MARKER_RADIUS);
+      
+      //  Draw line
+      sf::Vertex lineline[] =
+      {
+        sf::Vertex(sf::Vector2f(10, yCoordinate)),
+        sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 25), yCoordinate))
+      };
+      window.draw(lineline, 2, sf::Lines);
+
+      // Draw vehicles
+      std::vector<VehicleInfo> linevehicles = lines[i]->getVehicles();
+      for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
+          it != linevehicles.cend(); ++it)
+      {
+        marker.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - MARKER_RADIUS);
+        window.draw(marker);
+      }
+
     }
 
     window.display();
