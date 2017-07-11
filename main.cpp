@@ -1,17 +1,21 @@
+
+#include <SFML/Graphics.hpp>
+
 #include <iostream>
 //#include <utility>
 #include <vector>
 #include <map>
 #include <cstdlib>
 #include <ctime>
+#include <algorithm>
 
 #include "controller.h"
 #include "controlleruser.h"
 #include "lockstepvalue.h"
 
-const int SPEED = 100;
+const int SPEED = 50;
 const int SAFE_DISTANCE = 500;
-const int LINE_LENGTH = 1000;
+const int LINE_LENGTH = 5000;
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
 
@@ -166,11 +170,25 @@ class Line : public ControllerUser
       std::cout << "Tick number: " << tickNumber.NOW();
       std::cout << std::endl;
     }
+
+    std::vector<VehicleInfo> getVehicles()
+    {
+      return _vehicles.NOW();
+    }
+
 };
 
 
 int main()
 {
+  sf::RenderWindow window(sf::VideoMode(800, 600),
+      "Trafikk",
+      sf::Style::Default);
+
+  sf::CircleShape shape(100.f);
+  shape.setFillColor(sf::Color::Green);
+
+
   std::cout << "Hello, world!" << std::endl;
   std::srand(std::time(NULL));
  
@@ -199,11 +217,66 @@ int main()
 //  const int NUMBER_OF_TICKS = 60 * 60 * 24; // 24 hours worth of seconds
 
   line.print();
+
+  // Main loop
+  std::cout << "Entering main loop..." << std::endl;
+  bool running = true;
+  while (running)
+  {
+    sf::Event event;
+    while (window.pollEvent(event))
+    {
+      switch (event.type)
+      {
+        case sf::Event::Closed:
+          running = false;
+          break;
+        default:
+          break;
+      }
+    }
+
+    controller.tick();
+
+    window.clear(sf::Color::Black);
+    window.draw(shape);
+
+    // TODO: Draw line.
+    // Line
+    sf::Vertex lineline[] =
+      {
+      sf::Vertex(sf::Vector2f(10, 10)),
+      sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 10), 10))
+    };
+    window.draw(lineline, 2, sf::Lines);
+      
+    // Vehicles
+    sf::CircleShape marker(5);
+    std::vector<VehicleInfo> linevehicles = line.getVehicles();
+    for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
+        it != linevehicles.cend(); ++it)
+    {
+      // TODO draw vehicles
+      marker.setPosition(10 + (it->position / 10), 10);
+      window.draw(marker);
+    }
+
+
+    int linesToDraw = std::min(NUMBER_OF_ADDITIONAL_LINES, 10);
+    for (int i = 0; i < linesToDraw; ++i)
+    {
+      // TODO: Draw lines[i]
+    }
+
+    window.display();
+  }
+
+/*
   for (int i = 0; i < NUMBER_OF_TICKS; ++i)
   {
     controller.tick();
 //    line.print();
-  }
+  }*/
   line.print();
 
   for (int i = 0; i < NUMBER_OF_ADDITIONAL_LINES; ++i)
