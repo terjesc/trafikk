@@ -18,6 +18,9 @@ const int SAFE_DISTANCE = 500;
 const int LINE_LENGTH = 10000;
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
+const int NUMBER_OF_LINES = 16384;
+      // For reference, Cities Skylines has a maximum of 32768 road segments
+const int NUMBER_OF_LINES_TO_DRAW = 10;
 
 const bool LIMIT_FRAMERATE = false;
 
@@ -195,13 +198,9 @@ int main()
   controller.registerTickType(0);
   controller.registerTickType(1);
 
-  Line line(&controller);
 
-  // For reference, Cities Skylines has a maximum of 32768 road segments
-  const int NUMBER_OF_ADDITIONAL_LINES = 16384;
-
-  Line *lines[NUMBER_OF_ADDITIONAL_LINES];
-  for (int i = 0; i < NUMBER_OF_ADDITIONAL_LINES; ++i)
+  Line *lines[NUMBER_OF_LINES];
+  for (int i = 0; i < NUMBER_OF_LINES; ++i)
   {
     lines[i] = new Line(&controller);
   }
@@ -209,7 +208,7 @@ int main()
   std::cout << "Total number of vehicles: "
     << totalNumberOfVehicles << std::endl;
 
-  line.print();
+  lines[0]->print();
 
   // Main loop
   std::cout << "Entering main loop..." << std::endl;
@@ -233,41 +232,23 @@ int main()
 
     window.clear(sf::Color::Black);
 
-    // Draw line
-    sf::Vertex lineline[] =
-    {
-      sf::Vertex(sf::Vector2f(10, 10)),
-      sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 25), 10))
-    };
-    window.draw(lineline, 2, sf::Lines);
-      
-    // Draw vehicles on line
+    // Draw some of the lines
+    int linesToDraw = std::min(NUMBER_OF_LINES, NUMBER_OF_LINES_TO_DRAW);
+    
     const int MARKER_RADIUS = 5;
     sf::CircleShape marker(MARKER_RADIUS);
 
-    // Draw vehicles
-    std::vector<VehicleInfo> linevehicles = line.getVehicles();
-    for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
-        it != linevehicles.cend(); ++it)
-    {
-      marker.setPosition(MARKER_RADIUS + (it->position / 25), MARKER_RADIUS);
-      window.draw(marker);
-    }
-
-
-    // Draw some more lines
-    int linesToDraw = std::min(NUMBER_OF_ADDITIONAL_LINES, 50);
     for (int i = 0; i < linesToDraw; ++i)
     {
-      int yCoordinate = (2 * (i + 2) * MARKER_RADIUS);
+      int yCoordinate = (2 * (i + 1) * MARKER_RADIUS);
       
       //  Draw line
-      sf::Vertex lineline[] =
+      sf::Vertex line[] =
       {
         sf::Vertex(sf::Vector2f(10, yCoordinate)),
         sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 25), yCoordinate))
       };
-      window.draw(lineline, 2, sf::Lines);
+      window.draw(line, 2, sf::Lines);
 
       // Draw vehicles
       std::vector<VehicleInfo> linevehicles = lines[i]->getVehicles();
@@ -283,9 +264,9 @@ int main()
     window.display();
   }
 
-  line.print();
+  lines[0]->print();
 
-  for (int i = 0; i < NUMBER_OF_ADDITIONAL_LINES; ++i)
+  for (int i = 0; i < NUMBER_OF_LINES; ++i)
   {
     delete lines[i];
   }
