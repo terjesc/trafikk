@@ -1,5 +1,9 @@
 
 #include <SFML/Graphics.hpp>
+#include <SFML/System/Clock.hpp>
+
+#include "imgui.h"
+#include "imgui-SFML.h"
 
 #include <iostream>
 //#include <utility>
@@ -180,6 +184,8 @@ int main()
   sf::RenderWindow window(sf::VideoMode(800, 600),
       "Trafikk",
       sf::Style::Default);
+  
+  ImGui::SFML::Init(window);
 
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
@@ -213,6 +219,7 @@ int main()
 
   lines[0]->print();
 
+  sf::Clock deltaClock;
   // Main loop
   std::cout << "Entering main loop..." << std::endl;
   bool running = true;
@@ -221,6 +228,8 @@ int main()
     sf::Event event;
     while (window.pollEvent(event))
     {
+      ImGui::SFML::ProcessEvent(event);
+
       switch (event.type)
       {
         case sf::Event::Closed:
@@ -230,6 +239,12 @@ int main()
           break;
       }
     }
+
+    ImGui::SFML::Update(window, deltaClock.restart());
+
+    ImGui::Begin("Hello, world!");
+    ImGui::Button("Look at this pretty button");
+    ImGui::End();
 
     controller.tick();
 
@@ -264,6 +279,7 @@ int main()
 
     }
 
+    ImGui::SFML::Render(window);
     window.display();
   }
 
@@ -274,6 +290,7 @@ int main()
     delete lines[i];
   }
 
+  ImGui::SFML::Shutdown();
   return 0;
 }
 
