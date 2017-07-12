@@ -343,9 +343,12 @@ int main()
     float fps = 1000.0 / elapsed.asMilliseconds();
     char fps_str[30];
     snprintf( fps_str, 30, "%5.1f FPS", fps);
+    char vehicle_str[30];
+    snprintf( vehicle_str, 30, "%i vehicles", totalNumberOfVehicles);
 
     ImGui::Begin("Diagnostics");
     ImGui::Text(fps_str);
+    ImGui::Text(vehicle_str);
     ImGui::End();
 
     controller.tick();
