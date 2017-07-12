@@ -25,6 +25,8 @@ const int SAFE_DISTANCE = 500;
 const int LINE_LENGTH = 10000;
 const int VEHICLE_LENGTH = 500;
 
+const int ZOOM_SHRINKING_FACTOR = 20;
+
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
 const int NUMBER_OF_LINES = 16384;
       // For reference, Cities Skylines has a maximum of 32768 road segments
@@ -314,6 +316,7 @@ int main()
   lines[0]->print();
 
   sf::Clock deltaClock;
+  sf::Clock fpsClock;
   // Main loop
   std::cout << "Entering main loop..." << std::endl;
   bool running = true;
@@ -336,8 +339,13 @@ int main()
 
     ImGui::SFML::Update(window, deltaClock.restart());
 
-    ImGui::Begin("Hello, world!");
-    ImGui::Button("Look at this pretty button");
+    sf::Time elapsed = fpsClock.restart();
+    float fps = 1000.0 / elapsed.asMilliseconds();
+    char fps_str[30];
+    snprintf( fps_str, 30, "%5.1f FPS", fps);
+
+    ImGui::Begin("Diagnostics");
+    ImGui::Text(fps_str);
     ImGui::End();
 
     controller.tick();
@@ -362,7 +370,7 @@ int main()
       sf::Vertex line[] =
       {
         sf::Vertex(sf::Vector2f(10, yCoordinate)),
-        sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / 25), yCoordinate))
+        sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / ZOOM_SHRINKING_FACTOR), yCoordinate))
       };
       window.draw(line, 2, sf::Lines);
 
@@ -373,13 +381,13 @@ int main()
           it != linevehicles.cend(); ++it)
       {
         // Circular marker for vehicle
-        marker.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - MARKER_RADIUS);
+        marker.setPosition(MARKER_RADIUS + (it->position / ZOOM_SHRINKING_FACTOR), yCoordinate - MARKER_RADIUS);
         window.draw(marker);
         // Write the vehicle number on the vehicle
         char markerTextString[4];
         snprintf(markerTextString, 4, "%i", vehicleNumber++);
         markerText.setString(markerTextString);
-        markerText.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - (2 * MARKER_RADIUS));
+        markerText.setPosition(MARKER_RADIUS + (it->position / ZOOM_SHRINKING_FACTOR), yCoordinate - (2 * MARKER_RADIUS));
         window.draw(markerText);
       }
     }
