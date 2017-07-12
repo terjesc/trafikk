@@ -12,6 +12,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <climits>
+
 #include "startup_sound.h"
 
 #include "controller.h"
@@ -21,6 +23,7 @@
 const int SPEED = 50;
 const int SAFE_DISTANCE = 500;
 const int LINE_LENGTH = 10000;
+const int VEHICLE_LENGTH = 500;
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
 const int NUMBER_OF_LINES = 16384;
@@ -34,13 +37,14 @@ static int totalNumberOfVehicles = 0;
 struct Blocker
 {
   int speed;
-  int position;
+  int distance;
 };
 
 
 struct VehicleInfo
 {
   int speed;
+  int preferedSpeed;
   int position;
 };
 
@@ -68,9 +72,9 @@ class Line : public ControllerUser
       std::vector<VehicleInfo> v;
       for (int i = 0; i < numberOfVehicles; ++i)
       {
-        int vehicleSpeed = SPEED - 10 + (rand() % 21);
-        int vehiclePosition = i * LINE_LENGTH / numberOfVehicles;
-        VehicleInfo vi = {vehicleSpeed, vehiclePosition};
+        int vehiclePreferedSpeed = SPEED - 10 + (rand() % 21);
+        int vehiclePosition = LINE_LENGTH - (i * LINE_LENGTH / numberOfVehicles);
+        VehicleInfo vi = {SPEED, vehiclePreferedSpeed, vehiclePosition};
         v.push_back(vi);
       }
       _vehicles.initialize(v);
@@ -89,20 +93,50 @@ class Line : public ControllerUser
       m_vehicleInbox[inboxNumber].push_back(vehicleInfo);
     }
 
-    Blocker getBlocker()
+    Blocker getBlocker(int maxDistance)
     {
-      return _blocker.NOW();
+
+      if (!_vehicles.NOW().empty()) // We have a blocker in this line
+      {
+        if (_blocker.NOW().distance > maxDistance) // But too far down the road
+        {
+          Blocker infiniteBlocker = {INT_MAX,INT_MAX};
+          return  infiniteBlocker;
+        }
+        else
+        {
+          return _blocker.NOW();
+        }
+      }
+      else // No blocker in this line
+      {
+        if (m_length > maxDistance)
+        {
+          Blocker infiniteBlocker = {INT_MAX,INT_MAX};
+          return infiniteBlocker;
+        }
+        else
+        {
+          Blocker blocker = m_out[0]->getBlocker(maxDistance - m_length);
+          blocker.distance = blocker.distance + m_length;
+          return blocker;
+        }
+      }
     }
 
     virtual void tick(int tickType)
     {
-      if (tickType == 0)
+      switch(tickType)
       {
-        tick0();
-      }
-      else if (tickType == 1)
-      {
-        tick1();
+        case 0:
+          tick0();
+          break;
+        case 1:
+          tick1();
+          break;
+        default:
+          // Unknown tick type, do not tick.
+          break;
       }
     }
 
@@ -115,8 +149,54 @@ class Line : public ControllerUser
       for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
           it != _vehicles.NOW().cend(); ++it)
       {
+        // Find the relative distance to the car in front
+        int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
+        Blocker nextVehicle;
+        
         VehicleInfo element = *it;
+        
+        if (vehicleIndex == 0)
+        {
+          nextVehicle = m_out[0]->getBlocker(500);
+          if (nextVehicle.distance != INT_MAX)
+          {
+            nextVehicle.distance += (m_length - element.position);
+          }
+        }
+        else
+        {
+          nextVehicle.speed = _vehicles.NOW()[vehicleIndex - 1].speed;
+          nextVehicle.distance = _vehicles.NOW()[vehicleIndex - 1].position - element.position - VEHICLE_LENGTH;
+        }
+
+        int myBrakePoint = element.speed * element.speed / 2;
+        int nextBrakePoint = nextVehicle.distance + (nextVehicle.speed * nextVehicle.speed / 2);
+
+        if (myBrakePoint >= nextBrakePoint && element.speed > 0)
+        {
+          // We may collide! Brake!
+          element.speed -= 1;
+        }
+        else if ((myBrakePoint + (2 * element.speed) + 1) < (nextBrakePoint - 1))
+        {
+          // Next vehicle is far away! We may increase our speed if we want to.
+          if (element.speed < element.preferedSpeed)
+          {
+            element.speed += 1;
+          }
+        }
+        else if (element.speed > element.preferedSpeed)
+        {
+          // We go faster than we want to! Brake!
+          element.speed -= 1;
+        }
+
+
+        // TODO: We need some sort of addressing/indexing of the vehicles,
+        //       for an easy way to find nearby vehicles.
+
         element.position = element.position + element.speed;
+        
         if (element.position < m_length)
         {
           _vehicles.THEN().push_back(element);
@@ -147,6 +227,14 @@ class Line : public ControllerUser
           addVehicle(*it_element);
         }
         it_inbox->second.clear();
+      }
+
+      // Update blocker
+      if (!_vehicles.THEN().empty())
+      {
+        std::vector<VehicleInfo>::const_reverse_iterator lastVehicle = _vehicles.THEN().crbegin();
+        _blocker.THEN().distance = lastVehicle->position - VEHICLE_LENGTH;
+        _blocker.THEN().speed = lastVehicle->speed;
       }
 
       // Just a basic test, counting tick number.
@@ -294,7 +382,6 @@ int main()
         markerText.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - (2 * MARKER_RADIUS));
         window.draw(markerText);
       }
-
     }
 
     ImGui::SFML::Render(window);
