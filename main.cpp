@@ -203,6 +203,12 @@ int main()
 
   playStartupSound();
  
+  // Load a font
+  sf::Font font;
+  char fontName[] = "FreeMono.ttf";
+  font.loadFromFile(fontName);
+
+  // Controller for ticking and lockstep values
   Controller controller;
   controller.registerTickType(0);
   controller.registerTickType(1);
@@ -255,6 +261,10 @@ int main()
     
     const int MARKER_RADIUS = 5;
     sf::CircleShape marker(MARKER_RADIUS);
+    sf::Text markerText("", font);
+    markerText.setFillColor(sf::Color::Red);
+    markerText.setCharacterSize(14);
+    window.draw(markerText);
 
     for (int i = 0; i < linesToDraw; ++i)
     {
@@ -270,11 +280,19 @@ int main()
 
       // Draw vehicles
       std::vector<VehicleInfo> linevehicles = lines[i]->getVehicles();
+      int vehicleNumber = 1;
       for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
           it != linevehicles.cend(); ++it)
       {
+        // Circular marker for vehicle
         marker.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - MARKER_RADIUS);
         window.draw(marker);
+        // Write the vehicle number on the vehicle
+        char markerTextString[4];
+        snprintf(markerTextString, 4, "%i", vehicleNumber++);
+        markerText.setString(markerTextString);
+        markerText.setPosition(MARKER_RADIUS + (it->position / 25), yCoordinate - (2 * MARKER_RADIUS));
+        window.draw(markerText);
       }
 
     }
