@@ -1,6 +1,14 @@
 
+#include <GL/glew.h>
+
 #include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
 #include <SFML/System/Clock.hpp>
+
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "imgui.h"
 #include "imgui-SFML.h"
@@ -268,13 +276,28 @@ class Line : public ControllerUser
 
 };
 
+void unbindModernGL()
+{
+  // Unbind to allow for SFML graphics
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glUseProgram(0);
+}
+
 
 int main()
 {
+  sf::ContextSettings contextSettings;
+  contextSettings.depthBits = 24;
   sf::RenderWindow window(sf::VideoMode(800, 600),
       "Trafikk",
-      sf::Style::Default);
-  
+      sf::Style::Default,
+      contextSettings);
+
+  // Initialize GLEW
+  glewInit();
+
+  // Initialize ImGui
   ImGui::SFML::Init(window);
 
   // Framerate and sync settings
@@ -297,6 +320,28 @@ int main()
   sf::Font font;
   char fontName[] = "FreeMono.ttf";
   font.loadFromFile(fontName);
+
+  // OpenGL init
+  glViewport(0, 0, window.getSize().x, window.getSize().y);
+
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+
+  GLfloat ratio = static_cast<float>( window.getSize().x ) / window.getSize().y;
+  glFrustum(-ratio * 0.5f, ratio * 0.5f, -0.5f, 0.5f, 1.0f, 500.0f);
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
+  glClearDepth(1.0f);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+
+  glDepthMask(GL_TRUE);
+  glEnable(GL_CULL_FACE);
+
+  GLfloat rtri = 0.0f;
+  GLfloat rquad = 0.0f;
 
   // Controller for ticking and lockstep values
   Controller controller;
@@ -337,9 +382,23 @@ int main()
       }
     }
 
-    ImGui::SFML::Update(window, deltaClock.restart());
+    sf::Time elapsed = deltaClock.restart();
 
-    sf::Time elapsed = fpsClock.restart();
+    rtri += 0.0005f * 360 * elapsed.asMilliseconds();
+    rquad -= 0.00025 * 360 * elapsed.asMilliseconds();
+
+    glClearColor(0.05f, 0.05f, 0.15f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // Camera position
+    glLoadIdentity();
+    glTranslatef(0.0f, 0.0f, -15.0f); // Go back (zoom out, fixed)
+    glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Tilt (fixed)
+    glRotatef(-10.0f, 0.0f, 0.0f, 1.0f); // Rotate (fixed)
+
+    ImGui::SFML::Update(window, elapsed);
+
+//    sf::Time elapsed = fpsClock.restart();
     float fps = 1000.0 / elapsed.asMilliseconds();
     char fps_str[30];
     snprintf( fps_str, 30, "%5.1f FPS", fps);
@@ -353,7 +412,10 @@ int main()
 
     controller.tick();
 
-    window.clear(sf::Color::Black);
+//    window.clear(sf::Color::Black);
+
+    unbindModernGL();
+    window.pushGLStates();
 
     // Draw some of the lines
     int linesToDraw = std::min(NUMBER_OF_LINES, NUMBER_OF_LINES_TO_DRAW);
@@ -396,6 +458,9 @@ int main()
     }
 
     ImGui::SFML::Render(window);
+
+    window.popGLStates();
+
     window.display();
   }
 
