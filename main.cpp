@@ -277,7 +277,6 @@ int main()
 
 
     // Draw some of the lines, using OpenGL
-    int linesToDraw = std::min(static_cast<int>( otherLines.size() ), NUMBER_OF_LINES_TO_DRAW);
     for (int i = 0; i < static_cast<int>( otherLines.size() ); ++i)
     {
       otherLines[i]->draw();
