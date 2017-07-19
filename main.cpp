@@ -298,7 +298,27 @@ class Line : public ControllerUser
       glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);
       glEnd();
 
-      // TODO draw vehicles
+      // Draw vehicles
+      for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
+          it != _vehicles.NOW().cend(); ++it)
+      {
+        // Calculate vehicle coordinates
+        Coordinates vehicleCoordinates;
+        vehicleCoordinates.x = m_beginPoint.x + (it->position * (m_endPoint.x - m_beginPoint.x) / m_length);
+        vehicleCoordinates.y = m_beginPoint.y + (it->position * (m_endPoint.y - m_beginPoint.y) / m_length);
+        vehicleCoordinates.z = 0.0f;
+        // Draw vehicle
+        glColor3f(0.8f, 1.0f, 0.8f);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z + 1.0f);
+        glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
+        glVertex3f(vehicleCoordinates.x - 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
+        glVertex3f(vehicleCoordinates.x - 0.1f, vehicleCoordinates.y - 0.1f, vehicleCoordinates.z);
+        glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y - 0.1f, vehicleCoordinates.z);
+        glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
+        glEnd();
+      }
+     //
     }
 
     std::vector<VehicleInfo> getVehicles()
