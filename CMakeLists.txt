@@ -9,7 +9,7 @@ set(IMGUI_SOURCES "imgui/imgui.cpp" "imgui/imgui_draw.cpp")
 include_directories(imgui)
 
 #compile trafikk
-add_executable(trafikk main.cpp controller.cpp controlleruser.cpp startup_sound.cpp ${IMGUI_SFML_SOURCES} ${IMGUI_SOURCES})
+add_executable(trafikk main.cpp line.cpp controller.cpp controlleruser.cpp startup_sound.cpp ${IMGUI_SFML_SOURCES} ${IMGUI_SOURCES})
 target_link_libraries(trafikk sfml-graphics sfml-window sfml-system sfml-audio GL GLEW)
 
 if(UNIX)
