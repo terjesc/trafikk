@@ -28,7 +28,7 @@ const int VEHICLE_LENGTH = 500;
 const int ZOOM_SHRINKING_FACTOR = 20;
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 7;
-const int NUMBER_OF_LINES = 16384;
+const int NUMBER_OF_LINES = 1000;
       // For reference, Cities Skylines has a maximum of 32768 road segments
 const int NUMBER_OF_LINES_TO_DRAW = 10;
 
