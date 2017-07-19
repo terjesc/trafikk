@@ -7,18 +7,34 @@
 #include <iostream>
 #include <GL/glew.h>
 
-Line::Line(Controller *controller)
+Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoint)
   : ControllerUser(controller),
     _blocker(controller, {0, 0}),
     _vehicles(controller),
     tickNumber(controller, 0)
 {
-  m_beginPoint = { static_cast<float>(rand() % 20) - 10.0f,
+  if (beginPoint != NULL)
+  {
+    m_beginPoint = *beginPoint;
+  }
+  else
+  {
+    m_beginPoint = { static_cast<float>(rand() % 20) - 10.0f,
+                     static_cast<float>(rand() % 20) - 10.0f,
+                     0.0f };
+  }
+
+  if (endPoint != NULL)
+  {
+    m_endPoint = *endPoint;
+  }
+  else
+  {
+    m_endPoint = { static_cast<float>(rand() % 20) - 10.0f,
                    static_cast<float>(rand() % 20) - 10.0f,
                    0.0f };
-  m_endPoint = { static_cast<float>(rand() % 20) - 10.0f,
-                 static_cast<float>(rand() % 20) - 10.0f,
-                 0.0f };
+  }
+
   m_length = 1000 * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
 
   int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
@@ -32,8 +48,8 @@ Line::Line(Controller *controller)
     v.push_back(vi);
   }
   _vehicles.initialize(v);
-  m_out.push_back(this);
-  m_in.push_back(this);
+//  m_out.push_back(this);
+//  m_in.push_back(this);
 }
 
 int Line::totalNumberOfVehicles = 0;
@@ -70,6 +86,11 @@ Blocker Line::getBlocker(int maxDistance)
       Blocker infiniteBlocker = {INT_MAX,INT_MAX};
       return infiniteBlocker;
     }
+    else if (m_out.empty())
+    {
+      Blocker infiniteBlocker = {INT_MAX,INT_MAX};
+      return infiniteBlocker;
+    }
     else
     {
       Blocker blocker = m_out[0]->getBlocker(maxDistance - m_length);
@@ -81,8 +102,9 @@ Blocker Line::getBlocker(int maxDistance)
 
 void Line::addIn(Line * in)
 {
-  if (std::find(m_in.begin(), m_in.end(), in) != m_in.end())
+  if (std::find(m_in.begin(), m_in.end(), in) == m_in.end())
   {
+    std::cout << "addIn: Connecting line " << in << " to line " << this << std::endl;
     m_in.push_back(in);
     in->addOut(this);
   }
@@ -90,8 +112,9 @@ void Line::addIn(Line * in)
 
 void Line::addOut(Line * out)
 {
-  if (std::find(m_out.begin(), m_out.end(), out) != m_out.end())
+  if (std::find(m_out.begin(), m_out.end(), out) == m_out.end())
   {
+    std::cout << "addOut: Connecting line " << this << " to line " << out << std::endl;
     m_out.push_back(out);
     out->addIn(this);
   }
@@ -129,13 +152,16 @@ void Line::tick0()
   {
     // Find the relative distance to the car in front
     int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
-    Blocker nextVehicle;
+    Blocker nextVehicle = {INT_MAX,INT_MAX};
     
     VehicleInfo element = *it;
     
     if (vehicleIndex == 0)
     {
-      nextVehicle = m_out[0]->getBlocker(500);
+      if (!m_out.empty())
+      {
+        nextVehicle = m_out[0]->getBlocker(500);
+      }
       if (nextVehicle.distance != INT_MAX)
       {
         nextVehicle.distance += (m_length - element.position);
@@ -185,7 +211,10 @@ void Line::tick0()
       element.position -= m_length;
       // TODO choose out line to put the vehicle,
       //      currently hard coded to the first slot.
-      m_out[0]->deliverVehicle(this, element);
+      if (!m_out.empty())
+      {
+        m_out[rand() % m_out.size()]->deliverVehicle(this, element);
+      }
     }
   }
 }

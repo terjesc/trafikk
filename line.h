@@ -6,7 +6,7 @@
 #include <vector>
 #include <map>
 
-const int AVERAGE_NUMBER_OF_VEHICLES = 7;
+const int AVERAGE_NUMBER_OF_VEHICLES = 5;
 const int SPEED = 50;
 const int VEHICLE_LENGTH = 500;
 
@@ -43,7 +43,7 @@ class Line : public ControllerUser
   public:
     static int totalNumberOfVehicles;
 
-    Line(Controller *controller);
+    Line(Controller *controller, Coordinates* beginPoint = NULL, Coordinates* endPoint = NULL);
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
     Blocker getBlocker(int maxDistance);

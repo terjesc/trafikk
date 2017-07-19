@@ -37,6 +37,8 @@ const int NUMBER_OF_LINES = 1000;
       // For reference, Cities Skylines has a maximum of 32768 road segments
 const int NUMBER_OF_LINES_TO_DRAW = 10;
 
+const int NUMBER_OF_NODES = 10;
+
 const bool LIMIT_FRAMERATE = false;
 
 void unbindModernGL()
@@ -112,11 +114,112 @@ int main()
   controller.registerTickType(1);
 
 
+  // Make some lines
   Line *lines[NUMBER_OF_LINES];
   for (int i = 0; i < NUMBER_OF_LINES; ++i)
   {
     lines[i] = new Line(&controller);
   }
+
+  // Make some other lines
+  std::vector<Line*> otherLines;
+
+  // Make some "nodes", to aid in generating a random network of lines.
+  std::cout << "Creating nodes..." << std::endl;
+  struct
+  {
+    Coordinates coordinates;
+    std::set<Line*> in;
+    std::set<Line*> out;
+  } nodes[NUMBER_OF_NODES];
+
+  // Randomize the nodes
+  for (int i = 0; i < NUMBER_OF_NODES; ++i)
+  {
+    nodes[i].coordinates.x = static_cast<float>( rand() % 20 ) - 10.0f;
+    nodes[i].coordinates.y = static_cast<float>( rand() % 20 ) - 10.0f;
+    nodes[i].coordinates.z = 0.0f;
+  }
+
+  // Create a line exiting from every node
+  for (int sourceIndex = 0; sourceIndex < NUMBER_OF_NODES; ++sourceIndex)
+  {
+    int targetIndex = sourceIndex;
+    do
+    {
+      targetIndex = rand() % NUMBER_OF_NODES;
+    } while (targetIndex == sourceIndex);
+
+    // Create the new line
+    Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
+    otherLines.push_back(newLine);
+    nodes[sourceIndex].out.insert(newLine);
+    nodes[targetIndex].in.insert(newLine);
+
+    // Set up the connections for the line
+    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
+        it != nodes[sourceIndex].in.cend(); ++it)
+    {
+      newLine->addIn(*it);
+    }
+    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
+        it != nodes[targetIndex].out.cend(); ++it)
+    {
+      newLine->addOut(*it);
+    }
+  }
+
+  // Create a line entering every node with no entering line thus far
+  for (int targetIndex = 0; targetIndex < NUMBER_OF_NODES; ++targetIndex)
+  {
+    if (!nodes[targetIndex].in.empty())
+    {
+//      continue;
+    }
+    int sourceIndex = targetIndex;
+    do
+    {
+      sourceIndex = rand() % NUMBER_OF_NODES;
+    } while (sourceIndex == targetIndex);
+
+    // Create the new line
+    Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
+    otherLines.push_back(newLine);
+    nodes[sourceIndex].out.insert(newLine);
+    nodes[targetIndex].in.insert(newLine);
+
+    // Set up the connections for the line
+    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
+        it != nodes[sourceIndex].in.cend(); ++it)
+    {
+      newLine->addIn(*it);
+    }
+    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
+        it != nodes[targetIndex].out.cend(); ++it)
+    {
+      newLine->addOut(*it);
+    }
+  }
+
+#if DEBUG_PRINTOUT_FOR_THE_NODES 
+  // Debug printout for the nodes
+  for (int nodeIndex = 0; nodeIndex < NUMBER_OF_NODES; ++nodeIndex)
+  {
+    std::cout << "Node " << nodeIndex << ": " << std::endl;
+    std::cout << "\tIn:" << std::endl;
+    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].in.cbegin();
+        lineIt != nodes[nodeIndex].in.cend(); ++lineIt)
+    {
+      std::cout << "\t\t" << *lineIt << std::endl;
+    }
+    std::cout << "\tOut:" << std::endl;
+    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].out.cbegin();
+        lineIt != nodes[nodeIndex].out.cend(); ++lineIt)
+    {
+      std::cout << "\t\t" << *lineIt << std::endl;
+    }
+  }
+#endif
 
   std::cout << "Total number of vehicles: "
     << Line::totalNumberOfVehicles << std::endl;
@@ -174,10 +277,10 @@ int main()
 
 
     // Draw some of the lines, using OpenGL
-    int linesToDraw = std::min(NUMBER_OF_LINES, NUMBER_OF_LINES_TO_DRAW);
-    for (int i = 0; i < linesToDraw; ++i)
+    int linesToDraw = std::min(static_cast<int>( otherLines.size() ), NUMBER_OF_LINES_TO_DRAW);
+    for (int i = 0; i < static_cast<int>( otherLines.size() ); ++i)
     {
-      lines[i]->draw();
+      otherLines[i]->draw();
     }
 
     // Prepare for drawing through SFML
@@ -211,7 +314,7 @@ int main()
     markerText.setCharacterSize(14);
     window.draw(markerText);
 
-    for (int i = 0; i < linesToDraw; ++i)
+    for (int i = 0; i < static_cast<int>( otherLines.size() ); ++i)
     {
       int yCoordinate = (2 * (i + 1) * MARKER_RADIUS);
       
@@ -219,12 +322,12 @@ int main()
       sf::Vertex line[] =
       {
         sf::Vertex(sf::Vector2f(10, yCoordinate)),
-        sf::Vertex(sf::Vector2f(10 + (lines[i]->getLength() / ZOOM_SHRINKING_FACTOR), yCoordinate))
+        sf::Vertex(sf::Vector2f(10 + (otherLines[i]->getLength() / ZOOM_SHRINKING_FACTOR), yCoordinate))
       };
       window.draw(line, 2, sf::Lines);
 
       // Draw vehicles
-      std::vector<VehicleInfo> linevehicles = lines[i]->getVehicles();
+      std::vector<VehicleInfo> linevehicles = otherLines[i]->getVehicles();
       int vehicleNumber = 1;
       for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
           it != linevehicles.cend(); ++it)
