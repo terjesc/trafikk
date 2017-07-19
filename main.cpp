@@ -58,6 +58,10 @@ struct VehicleInfo
   int position;
 };
 
+struct Coordinates
+{
+  float x, y, z;
+};
 
 class Line : public ControllerUser
 {
@@ -69,6 +73,8 @@ class Line : public ControllerUser
     std::vector<Line *> m_in;
     int m_length;
     std::map<int, std::vector<VehicleInfo> > m_vehicleInbox;
+    
+    Coordinates m_beginPoint, m_endPoint;
 
   public:
     Line(Controller *controller)
@@ -90,7 +96,14 @@ class Line : public ControllerUser
       _vehicles.initialize(v);
       m_out.push_back(this);
       m_in.push_back(this);
-      m_length = LINE_LENGTH;
+
+      m_beginPoint = { static_cast<float>(rand() % 20) - 10.0f,
+                       static_cast<float>(rand() % 20) - 10.0f,
+                       0.0f };
+      m_endPoint = { static_cast<float>(rand() % 20) - 10.0f,
+                     static_cast<float>(rand() % 20) - 10.0f,
+                     0.0f };
+      m_length = 1000 * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
     }
 
     void addVehicle(VehicleInfo vehicleInfo)
@@ -132,6 +145,12 @@ class Line : public ControllerUser
           return blocker;
         }
       }
+    }
+
+
+    int getLength()
+    {
+      return m_length;
     }
 
     virtual void tick(int tickType)
@@ -269,6 +288,19 @@ class Line : public ControllerUser
       std::cout << std::endl;
     }
 
+    void draw()
+    {
+      // Draw the line
+      glLineWidth(1.5);
+      glColor3f(0.8f, 0.8f, 1.0f);
+      glBegin(GL_LINES);
+      glVertex3f(m_beginPoint.x, m_beginPoint.y, m_beginPoint.z);
+      glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);
+      glEnd();
+
+      // TODO draw vehicles
+    }
+
     std::vector<VehicleInfo> getVehicles()
     {
       return _vehicles.NOW();
@@ -362,6 +394,7 @@ int main()
 
   sf::Clock deltaClock;
   sf::Clock fpsClock;
+
   // Main loop
   std::cout << "Entering main loop..." << std::endl;
   bool running = true;
@@ -392,9 +425,33 @@ int main()
     
     // Camera position
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -15.0f); // Go back (zoom out, fixed)
+    glTranslatef(0.0f, 0.0f, -25.0f); // Go back (zoom out, fixed)
     glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Tilt (fixed)
     glRotatef(-10.0f, 0.0f, 0.0f, 1.0f); // Rotate (fixed)
+
+
+    // Draw an outline of our sandbox area
+    glLineWidth(2.5);
+    glColor3f(1.0f, 0.8f, 0.8f);
+    glBegin(GL_LINE_STRIP);
+    glVertex3f(-10.0f, -10.0f, 0.0f);
+    glVertex3f(-10.0f, 10.0f, 0.0f);
+    glVertex3f(10.0f, 10.0f, 0.0f);
+    glVertex3f(10.0f, -10.0f, 0.0f);
+    glVertex3f(-10.0f, -10.0f, 0.0f);
+    glEnd();
+
+
+    // Draw some of the lines, using OpenGL
+    int linesToDraw = std::min(NUMBER_OF_LINES, NUMBER_OF_LINES_TO_DRAW);
+    for (int i = 0; i < linesToDraw; ++i)
+    {
+      lines[i]->draw();
+    }
+
+    // Prepare for drawing through SFML
+    unbindModernGL();
+    window.pushGLStates();
 
     ImGui::SFML::Update(window, elapsed);
 
@@ -414,11 +471,7 @@ int main()
 
 //    window.clear(sf::Color::Black);
 
-    unbindModernGL();
-    window.pushGLStates();
-
     // Draw some of the lines
-    int linesToDraw = std::min(NUMBER_OF_LINES, NUMBER_OF_LINES_TO_DRAW);
     
     const int MARKER_RADIUS = 5;
     sf::CircleShape marker(MARKER_RADIUS);
@@ -435,7 +488,7 @@ int main()
       sf::Vertex line[] =
       {
         sf::Vertex(sf::Vector2f(10, yCoordinate)),
-        sf::Vertex(sf::Vector2f(10 + (LINE_LENGTH / ZOOM_SHRINKING_FACTOR), yCoordinate))
+        sf::Vertex(sf::Vector2f(10 + (lines[i]->getLength() / ZOOM_SHRINKING_FACTOR), yCoordinate))
       };
       window.draw(line, 2, sf::Lines);
 
