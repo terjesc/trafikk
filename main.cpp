@@ -28,6 +28,8 @@
 #include "controlleruser.h"
 #include "lockstepvalue.h"
 
+#define TRAFIKK_ONE_WAY_STREETS_ENABLED
+
 const int SAFE_DISTANCE = 500;
 const int LINE_LENGTH = 10000;
 
@@ -133,6 +135,7 @@ int main()
     nodes[i].coordinates.z = 0.0f;
   }
 
+  #ifdef TRAFIKK_ONE_WAY_STREETS_ENABLED
   // Create a line exiting from every node
   for (int sourceIndex = 0; sourceIndex < NUMBER_OF_NODES; ++sourceIndex)
   {
@@ -160,14 +163,11 @@ int main()
       newLine->addOut(*it);
     }
   }
+  #endif
 
-  // Create a line entering every node with no entering line thus far
+  // Create a line entering every node
   for (int targetIndex = 0; targetIndex < NUMBER_OF_NODES; ++targetIndex)
   {
-    if (!nodes[targetIndex].in.empty())
-    {
-//      continue;
-    }
     int sourceIndex = targetIndex;
     do
     {
@@ -191,6 +191,26 @@ int main()
     {
       newLine->addOut(*it);
     }
+
+    #ifndef TRAFIKK_ONE_WAY_STREETS_ENABLED
+    // Create a line the other way, for getting two lane roads
+    Line* reverseLine = new Line(&controller, &nodes[targetIndex].coordinates, &nodes[sourceIndex].coordinates);
+    otherLines.push_back(reverseLine);
+    nodes[targetIndex].out.insert(reverseLine);
+    nodes[sourceIndex].in.insert(reverseLine);
+
+    // Set up the connections for the reverse line
+    for (std::set<Line*>::const_iterator it = nodes[targetIndex].in.cbegin();
+        it != nodes[targetIndex].in.cend(); ++it)
+    {
+      reverseLine->addIn(*it);
+    }
+    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].out.cbegin();
+        it != nodes[sourceIndex].out.cend(); ++it)
+    {
+      reverseLine->addOut(*it);
+    }
+    #endif
   }
 
 #if DEBUG_PRINTOUT_FOR_THE_NODES 
