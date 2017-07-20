@@ -21,6 +21,7 @@ struct VehicleInfo
   int speed;
   int preferedSpeed;
   int position;
+  float color[3];
 };
 
 struct Coordinates

@@ -64,6 +64,9 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
     int vehiclePreferedSpeed = SPEED - 10 + (rand() % 21);
     int vehiclePosition = m_length - (i * m_length / numberOfVehicles);
     VehicleInfo vi = {SPEED, vehiclePreferedSpeed, vehiclePosition};
+    vi.color[0] = 0.4f + ((rand() % 500) / 1000.0f);
+    vi.color[1] = 0.4f + ((rand() % 500) / 1000.0f);
+    vi.color[2] = 0.4f + ((rand() % 500) / 1000.0f);
     v.push_back(vi);
   }
   _vehicles.initialize(v);
@@ -313,6 +316,7 @@ void Line::draw()
   glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);
   glEnd();
 
+  float angle = std::atan2(m_endPoint.y - m_beginPoint.y, m_endPoint.x - m_beginPoint.x);
   // Draw vehicles
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
@@ -323,15 +327,19 @@ void Line::draw()
     vehicleCoordinates.y = m_beginPoint.y + (it->position * (m_endPoint.y - m_beginPoint.y) / m_length);
     vehicleCoordinates.z = 0.0f;
     // Draw vehicle
-    glColor3f(0.8f, 1.0f, 0.8f);
+    glPushMatrix();
+    glColor3f(it->color[0], it->color[1], it->color[2]);
+    glTranslatef(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z);
+    glRotatef(angle * 180 / M_PI, 0.0f, 0.0f, 1.0f);
     glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z + 1.0f);
-    glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
-    glVertex3f(vehicleCoordinates.x - 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
-    glVertex3f(vehicleCoordinates.x - 0.1f, vehicleCoordinates.y - 0.1f, vehicleCoordinates.z);
-    glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y - 0.1f, vehicleCoordinates.z);
-    glVertex3f(vehicleCoordinates.x + 0.1f, vehicleCoordinates.y + 0.1f, vehicleCoordinates.z);
+    glVertex3f(0.0f, 0.0f, 0.4f);
+    glVertex3f( 0.2f,  0.1f, 0.0f);
+    glVertex3f(-0.2f,  0.1f, 0.0f);
+    glVertex3f(-0.2f, -0.1f, 0.0f);
+    glVertex3f( 0.2f, -0.1f, 0.0f);
+    glVertex3f( 0.2f,  0.1f, 0.0f);
     glEnd();
+    glPopMatrix();
   }
  //
 }
