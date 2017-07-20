@@ -37,6 +37,22 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
 
   m_length = 1000 * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
 
+  // Move line slightly to its right, to separate two-way traffic
+  Coordinates unitVector;
+  unitVector.x = (m_endPoint.x - m_beginPoint.x) * 1000 / m_length;
+  unitVector.y = (m_endPoint.y - m_beginPoint.y) * 1000 / m_length;
+  unitVector.z = 0.0f;
+
+  Coordinates normalVector;
+  normalVector.x = unitVector.y;
+  normalVector.y = -unitVector.x;
+  normalVector.z = 0.0f;
+
+  m_beginPoint.x += (0.2f * normalVector.x);
+  m_beginPoint.y += (0.2f * normalVector.y);
+  m_endPoint.x += (0.2f * normalVector.x);
+  m_endPoint.y += (0.2f * normalVector.y);
+
   int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
   totalNumberOfVehicles += numberOfVehicles;
   std::vector<VehicleInfo> v;
