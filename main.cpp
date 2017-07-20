@@ -54,7 +54,7 @@ int main()
 {
   sf::ContextSettings contextSettings;
   contextSettings.depthBits = 24;
-  sf::RenderWindow window(sf::VideoMode(800, 600),
+  sf::RenderWindow window(sf::VideoMode(1024, 768),
       "Trafikk",
       sf::Style::Default,
       contextSettings);
