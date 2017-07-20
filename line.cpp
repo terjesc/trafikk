@@ -13,6 +13,7 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
     _vehicles(controller),
     tickNumber(controller, 0)
 {
+  // Assign or randomize the physical starting point of the line
   if (beginPoint != NULL)
   {
     m_beginPoint = *beginPoint;
@@ -24,6 +25,7 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
                      0.0f };
   }
 
+  // Assign or randomize the physical ending point of the line
   if (endPoint != NULL)
   {
     m_endPoint = *endPoint;
@@ -53,6 +55,7 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
   m_endPoint.x += (0.2f * normalVector.x);
   m_endPoint.y += (0.2f * normalVector.y);
 
+  // Add a random number of vehicles
   int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
   totalNumberOfVehicles += numberOfVehicles;
   std::vector<VehicleInfo> v;
@@ -64,8 +67,6 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
     v.push_back(vi);
   }
   _vehicles.initialize(v);
-//  m_out.push_back(this);
-//  m_in.push_back(this);
 }
 
 int Line::totalNumberOfVehicles = 0;
@@ -97,19 +98,39 @@ Blocker Line::getBlocker(int maxDistance)
   }
   else // No blocker in this line
   {
-    if (m_length > maxDistance)
+    if (m_length > maxDistance) // The search "times out" in this line
     {
       Blocker infiniteBlocker = {INT_MAX,INT_MAX};
       return infiniteBlocker;
     }
-    else if (m_out.empty())
+    else if (m_out.empty()) // No outbound lines for continuing the search
     {
       Blocker infiniteBlocker = {INT_MAX,INT_MAX};
       return infiniteBlocker;
     }
-    else
+    else // Continue the search on outbound lines
     {
-      Blocker blocker = m_out[0]->getBlocker(maxDistance - m_length);
+      // Get blockers from all outbound lines
+      std::vector<Blocker> blockers;
+      for (std::vector<Line*>::const_iterator outboundLineIt = m_out.cbegin();
+          outboundLineIt != m_out.cend(); ++outboundLineIt)
+      {
+        blockers.push_back((*outboundLineIt)->getBlocker(maxDistance - m_length));
+      }
+
+      // Choose the closest blocker
+      // TODO There may be a better choice, taking speed into account as well
+      Blocker blocker;
+      for (std::vector<Blocker>::const_iterator blockerIt = blockers.cbegin();
+          blockerIt != blockers.cend(); ++blockerIt)
+      {
+        if (blockerIt->distance < blocker.distance)
+        {
+          blocker = *blockerIt;
+        }
+      }
+
+      // Final calculation
       blocker.distance = blocker.distance + m_length;
       return blocker;
     }
