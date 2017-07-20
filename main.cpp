@@ -113,15 +113,7 @@ int main()
   controller.registerTickType(0);
   controller.registerTickType(1);
 
-
   // Make some lines
-  Line *lines[NUMBER_OF_LINES];
-  for (int i = 0; i < NUMBER_OF_LINES; ++i)
-  {
-    lines[i] = new Line(&controller);
-  }
-
-  // Make some other lines
   std::vector<Line*> otherLines;
 
   // Make some "nodes", to aid in generating a random network of lines.
@@ -224,8 +216,6 @@ int main()
   std::cout << "Total number of vehicles: "
     << Line::totalNumberOfVehicles << std::endl;
 
-  lines[0]->print();
-
   sf::Clock deltaClock;
   sf::Clock fpsClock;
 
@@ -302,59 +292,11 @@ int main()
 
     controller.tick();
 
-//    window.clear(sf::Color::Black);
-
-    // Draw some of the lines
-    
-    const int MARKER_RADIUS = 5;
-    sf::CircleShape marker(MARKER_RADIUS);
-    sf::Text markerText("", font);
-    markerText.setFillColor(sf::Color::Red);
-    markerText.setCharacterSize(14);
-    window.draw(markerText);
-
-    for (int i = 0; i < static_cast<int>( otherLines.size() ); ++i)
-    {
-      int yCoordinate = (2 * (i + 1) * MARKER_RADIUS);
-      
-      //  Draw line
-      sf::Vertex line[] =
-      {
-        sf::Vertex(sf::Vector2f(10, yCoordinate)),
-        sf::Vertex(sf::Vector2f(10 + (otherLines[i]->getLength() / ZOOM_SHRINKING_FACTOR), yCoordinate))
-      };
-      window.draw(line, 2, sf::Lines);
-
-      // Draw vehicles
-      std::vector<VehicleInfo> linevehicles = otherLines[i]->getVehicles();
-      int vehicleNumber = 1;
-      for (std::vector<VehicleInfo>::const_iterator it = linevehicles.cbegin();
-          it != linevehicles.cend(); ++it)
-      {
-        // Circular marker for vehicle
-        marker.setPosition(MARKER_RADIUS + (it->position / ZOOM_SHRINKING_FACTOR), yCoordinate - MARKER_RADIUS);
-        window.draw(marker);
-        // Write the vehicle number on the vehicle
-        char markerTextString[4];
-        snprintf(markerTextString, 4, "%i", vehicleNumber++);
-        markerText.setString(markerTextString);
-        markerText.setPosition(MARKER_RADIUS + (it->position / ZOOM_SHRINKING_FACTOR), yCoordinate - (2 * MARKER_RADIUS));
-        window.draw(markerText);
-      }
-    }
-
     ImGui::SFML::Render(window);
 
     window.popGLStates();
 
     window.display();
-  }
-
-  lines[0]->print();
-
-  for (int i = 0; i < NUMBER_OF_LINES; ++i)
-  {
-    delete lines[i];
   }
 
   ImGui::SFML::Shutdown();
