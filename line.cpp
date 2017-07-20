@@ -216,7 +216,7 @@ void Line::tick0()
     int myBrakePoint = element.speed * element.speed / 2;
     int nextBrakePoint = nextVehicle.distance + (nextVehicle.speed * nextVehicle.speed / 2);
 
-    if (myBrakePoint >= nextBrakePoint && element.speed > 0)
+    if (myBrakePoint + std::pow(element.speed, 2) >= nextBrakePoint && element.speed > 0)
     {
       // We may collide! Brake!
       element.speed -= 1;
