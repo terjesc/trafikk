@@ -224,12 +224,12 @@ void Line::tick0()
     else if ((myBrakePoint + (2 * element.speed) + 1) < (nextBrakePoint - 1))
     {
       // Next vehicle is far away! We may increase our speed if we want to.
-      if (element.speed < element.preferedSpeed)
+      if (element.speed < element.preferredSpeed)
       {
         element.speed += 1;
       }
     }
-    else if (element.speed > element.preferedSpeed)
+    else if (element.speed > element.preferredSpeed)
     {
       // We go faster than we want to! Brake!
       element.speed -= 1;

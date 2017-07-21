@@ -19,7 +19,7 @@ struct Blocker
 struct VehicleInfo
 {
   int speed;
-  int preferedSpeed;
+  int preferredSpeed;
   int position;
   float color[3];
 };
