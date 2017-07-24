@@ -150,28 +150,69 @@ std::vector<Line*> createRandomLines(Controller &controller, bool oneWayLines)
     }
   }
 
-#if DEBUG_PRINTOUT_FOR_THE_NODES 
-  // Debug printout for the nodes
-  for (int nodeIndex = 0; nodeIndex < NUMBER_OF_NODES; ++nodeIndex)
-  {
-    std::cout << "Node " << nodeIndex << ": " << std::endl;
-    std::cout << "\tIn:" << std::endl;
-    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].in.cbegin();
-        lineIt != nodes[nodeIndex].in.cend(); ++lineIt)
-    {
-      std::cout << "\t\t" << *lineIt << std::endl;
-    }
-    std::cout << "\tOut:" << std::endl;
-    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].out.cbegin();
-        lineIt != nodes[nodeIndex].out.cend(); ++lineIt)
-    {
-      std::cout << "\t\t" << *lineIt << std::endl;
-    }
-  }
-#endif
-
   return lines;
+}
 
+std::vector<Line*> createTestLines(Controller &controller, float centerX, float centerY)
+{
+  std::vector<Line*> lines;
+
+  // Make some "nodes", to aid in generating the network.
+  std::cout << "Creating nodes..." << std::endl;
+  struct
+  {
+    Coordinates coordinates;
+    std::set<Line*> in;
+    std::set<Line*> out;
+  } nodes[6];
+
+  // Set node coordinates
+  nodes[0].coordinates = {centerX, centerY, 0.0f};
+  nodes[1].coordinates = {centerX + 8.0f, centerY, 0.0f};
+  nodes[2].coordinates = {centerX + 8.0f, centerY + 1.0f, 0.0f};
+  nodes[3].coordinates = {centerX - 8.0f, centerY + 1.0f, 0.0f};
+  nodes[4].coordinates = {centerX + 8.0f, centerY - 1.0f, 0.0f};
+  nodes[5].coordinates = {centerX - 8.0f, centerY - 1.0f, 0.0f};
+
+  int linePaths[] = {0, 1, // source, target,
+                     1, 2,
+                     2, 3,
+                     3, 0,
+                     1, 4,
+                     4, 5,
+                     5, 0};
+
+  // Set up lines between the nodes
+  for (int i = 0; i < 7; ++i)
+  {
+    // Fetch node indexes for line begin and end points
+    int sourceIndex = linePaths[2 * i];
+    int targetIndex = linePaths[2 * i + 1];
+
+    // Create line
+    Line* newLine = new Line(&controller, nodes[sourceIndex].coordinates,
+        nodes[targetIndex].coordinates);
+
+    // Register ins and outs
+    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
+        it != nodes[sourceIndex].in.cend(); ++it)
+    {
+      newLine->addIn(*it);
+    }
+    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
+        it != nodes[targetIndex].out.cend(); ++it)
+    {
+      newLine->addOut(*it);
+    }
+
+    // Register line at nodes
+    nodes[sourceIndex].out.insert(newLine);
+    nodes[targetIndex].in.insert(newLine);
+
+    // Push line to return value
+    lines.push_back(newLine);
+  }
+  return lines;
 }
 
 int main()
@@ -238,8 +279,21 @@ int main()
   controller.registerTickType(1);
 
   // Make some lines
-  const bool ONE_WAY_LINES = true;
-  std::vector<Line*> otherLines = createRandomLines(controller, ONE_WAY_LINES);
+//  const bool ONE_WAY_LINES = true;
+//  std::vector<Line*> lines = createRandomLines(controller, ONE_WAY_LINES);
+
+  std::vector<Line*> lines;
+
+  for (float yPos = -8.0f; yPos < 9.0f; yPos += 4.0f)
+  {
+    std::vector<Line*> otherLines = createTestLines(controller, 0.0f, yPos);
+
+    for (std::vector<Line*>::const_iterator it = otherLines.cbegin();
+        it != otherLines.cend(); ++it)
+    {
+      lines.push_back(*it);
+    }
+  }
 
   std::cout << "Total number of vehicles: "
     << Line::totalNumberOfVehicles << std::endl;
@@ -295,9 +349,9 @@ int main()
 
 
     // Draw some of the lines, using OpenGL
-    for (int i = 0; i < static_cast<int>( otherLines.size() ); ++i)
+    for (int i = 0; i < static_cast<int>( lines.size() ); ++i)
     {
-      otherLines[i]->draw();
+      lines[i]->draw();
     }
 
     // Prepare for drawing through SFML

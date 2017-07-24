@@ -39,22 +39,6 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
 
   m_length = 1000 * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
 
-  // Move line slightly to its right, to separate two-way traffic
-  Coordinates unitVector;
-  unitVector.x = (m_endPoint.x - m_beginPoint.x) * 1000 / m_length;
-  unitVector.y = (m_endPoint.y - m_beginPoint.y) * 1000 / m_length;
-  unitVector.z = 0.0f;
-
-  Coordinates normalVector;
-  normalVector.x = unitVector.y;
-  normalVector.y = -unitVector.x;
-  normalVector.z = 0.0f;
-
-  m_beginPoint.x += (0.2f * normalVector.x);
-  m_beginPoint.y += (0.2f * normalVector.y);
-  m_endPoint.x += (0.2f * normalVector.x);
-  m_endPoint.y += (0.2f * normalVector.y);
-
   // Add a random number of vehicles
   int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
   totalNumberOfVehicles += numberOfVehicles;
@@ -70,6 +54,11 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
     v.push_back(vi);
   }
   _vehicles.initialize(v);
+}
+
+Line::Line(Controller *controller, Coordinates beginPoint, Coordinates endPoint)
+  : Line(controller, &beginPoint, &endPoint)
+{
 }
 
 int Line::totalNumberOfVehicles = 0;
@@ -216,7 +205,7 @@ void Line::tick0()
     int myBrakePoint = element.speed * element.speed / 2;
     int nextBrakePoint = nextVehicle.distance + (nextVehicle.speed * nextVehicle.speed / 2);
 
-    if (myBrakePoint + std::pow(element.speed, 2) >= nextBrakePoint && element.speed > 0)
+    if (myBrakePoint + (std::pow(element.speed, 2) / 2) >= nextBrakePoint && element.speed > 0)
     {
       // We may collide! Brake!
       element.speed -= 1;
@@ -332,12 +321,12 @@ void Line::draw()
     glTranslatef(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z);
     glRotatef(angle * 180 / M_PI, 0.0f, 0.0f, 1.0f);
     glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(0.0f, 0.0f, 0.4f);
-    glVertex3f( 0.2f,  0.1f, 0.0f);
-    glVertex3f(-0.2f,  0.1f, 0.0f);
-    glVertex3f(-0.2f, -0.1f, 0.0f);
-    glVertex3f( 0.2f, -0.1f, 0.0f);
-    glVertex3f( 0.2f,  0.1f, 0.0f);
+    glVertex3f(0.0f, 0.0f, 0.2f);
+    glVertex3f( 0.15f,  0.075f, 0.0f);
+    glVertex3f(-0.15f,  0.075f, 0.0f);
+    glVertex3f(-0.15f, -0.075f, 0.0f);
+    glVertex3f( 0.15f, -0.075f, 0.0f);
+    glVertex3f( 0.15f,  0.075f, 0.0f);
     glEnd();
     glPopMatrix();
   }
@@ -347,5 +336,24 @@ void Line::draw()
 std::vector<VehicleInfo> Line::getVehicles()
 {
   return _vehicles.NOW();
+}
+
+void Line::moveRight(float distance)
+{
+  // Move line slightly to its right, to separate two-way traffic
+  Coordinates unitVector;
+  unitVector.x = (m_endPoint.x - m_beginPoint.x) * 1000 / m_length;
+  unitVector.y = (m_endPoint.y - m_beginPoint.y) * 1000 / m_length;
+  unitVector.z = 0.0f;
+
+  Coordinates normalVector;
+  normalVector.x = unitVector.y;
+  normalVector.y = -unitVector.x;
+  normalVector.z = 0.0f;
+
+  m_beginPoint.x += (distance * normalVector.x);
+  m_beginPoint.y += (distance * normalVector.y);
+  m_endPoint.x += (distance * normalVector.x);
+  m_endPoint.y += (distance * normalVector.y);
 }
 

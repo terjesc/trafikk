@@ -45,6 +45,8 @@ class Line : public ControllerUser
     static int totalNumberOfVehicles;
 
     Line(Controller *controller, Coordinates* beginPoint = NULL, Coordinates* endPoint = NULL);
+    Line(Controller *controller, Coordinates beginPoint, Coordinates endPoint);
+
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
     Blocker getBlocker(int maxDistance);
@@ -57,6 +59,7 @@ class Line : public ControllerUser
     void print();
     void draw();
     std::vector<VehicleInfo> getVehicles();
+    void moveRight(float distance = 0.2f);
 };
 
 
