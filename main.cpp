@@ -28,8 +28,6 @@
 #include "controlleruser.h"
 #include "lockstepvalue.h"
 
-#define TRAFIKK_ONE_WAY_STREETS_ENABLED
-
 const int SAFE_DISTANCE = 500;
 const int LINE_LENGTH = 10000;
 
@@ -51,6 +49,130 @@ void unbindModernGL()
   glUseProgram(0);
 }
 
+std::vector<Line*> createRandomLines(Controller &controller, bool oneWayLines)
+{
+  std::vector<Line*> lines;
+
+  // Make some "nodes", to aid in generating a random network of lines.
+  std::cout << "Creating nodes..." << std::endl;
+  struct
+  {
+    Coordinates coordinates;
+    std::set<Line*> in;
+    std::set<Line*> out;
+  } nodes[NUMBER_OF_NODES];
+
+  // Randomize the nodes
+  for (int i = 0; i < NUMBER_OF_NODES; ++i)
+  {
+    nodes[i].coordinates.x = static_cast<float>( rand() % 20 ) - 10.0f;
+    nodes[i].coordinates.y = static_cast<float>( rand() % 20 ) - 10.0f;
+    nodes[i].coordinates.z = 0.0f;
+  }
+
+  if (oneWayLines)
+  {
+    // Create a line exiting from every node
+    for (int sourceIndex = 0; sourceIndex < NUMBER_OF_NODES; ++sourceIndex)
+    {
+      int targetIndex = sourceIndex;
+      do
+      {
+        targetIndex = rand() % NUMBER_OF_NODES;
+      } while (targetIndex == sourceIndex);
+
+      // Create the new line
+      Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
+      lines.push_back(newLine);
+      nodes[sourceIndex].out.insert(newLine);
+      nodes[targetIndex].in.insert(newLine);
+
+      // Set up the connections for the line
+      for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
+          it != nodes[sourceIndex].in.cend(); ++it)
+      {
+        newLine->addIn(*it);
+      }
+      for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
+          it != nodes[targetIndex].out.cend(); ++it)
+      {
+        newLine->addOut(*it);
+      }
+    }
+  }
+
+  // Create a line entering every node
+  for (int targetIndex = 0; targetIndex < NUMBER_OF_NODES; ++targetIndex)
+  {
+    int sourceIndex = targetIndex;
+    do
+    {
+      sourceIndex = rand() % NUMBER_OF_NODES;
+    } while (sourceIndex == targetIndex);
+
+    // Create the new line
+    Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
+    lines.push_back(newLine);
+    nodes[sourceIndex].out.insert(newLine);
+    nodes[targetIndex].in.insert(newLine);
+
+    // Set up the connections for the line
+    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
+        it != nodes[sourceIndex].in.cend(); ++it)
+    {
+      newLine->addIn(*it);
+    }
+    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
+        it != nodes[targetIndex].out.cend(); ++it)
+    {
+      newLine->addOut(*it);
+    }
+
+    if (oneWayLines == false)
+    {
+      // Create a line the other way, for getting two lane roads
+      Line* reverseLine = new Line(&controller, &nodes[targetIndex].coordinates, &nodes[sourceIndex].coordinates);
+      lines.push_back(reverseLine);
+      nodes[targetIndex].out.insert(reverseLine);
+      nodes[sourceIndex].in.insert(reverseLine);
+
+      // Set up the connections for the reverse line
+      for (std::set<Line*>::const_iterator it = nodes[targetIndex].in.cbegin();
+          it != nodes[targetIndex].in.cend(); ++it)
+      {
+        reverseLine->addIn(*it);
+      }
+      for (std::set<Line*>::const_iterator it = nodes[sourceIndex].out.cbegin();
+          it != nodes[sourceIndex].out.cend(); ++it)
+      {
+        reverseLine->addOut(*it);
+      }
+    }
+  }
+
+#if DEBUG_PRINTOUT_FOR_THE_NODES 
+  // Debug printout for the nodes
+  for (int nodeIndex = 0; nodeIndex < NUMBER_OF_NODES; ++nodeIndex)
+  {
+    std::cout << "Node " << nodeIndex << ": " << std::endl;
+    std::cout << "\tIn:" << std::endl;
+    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].in.cbegin();
+        lineIt != nodes[nodeIndex].in.cend(); ++lineIt)
+    {
+      std::cout << "\t\t" << *lineIt << std::endl;
+    }
+    std::cout << "\tOut:" << std::endl;
+    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].out.cbegin();
+        lineIt != nodes[nodeIndex].out.cend(); ++lineIt)
+    {
+      std::cout << "\t\t" << *lineIt << std::endl;
+    }
+  }
+#endif
+
+  return lines;
+
+}
 
 int main()
 {
@@ -116,122 +238,8 @@ int main()
   controller.registerTickType(1);
 
   // Make some lines
-  std::vector<Line*> otherLines;
-
-  // Make some "nodes", to aid in generating a random network of lines.
-  std::cout << "Creating nodes..." << std::endl;
-  struct
-  {
-    Coordinates coordinates;
-    std::set<Line*> in;
-    std::set<Line*> out;
-  } nodes[NUMBER_OF_NODES];
-
-  // Randomize the nodes
-  for (int i = 0; i < NUMBER_OF_NODES; ++i)
-  {
-    nodes[i].coordinates.x = static_cast<float>( rand() % 20 ) - 10.0f;
-    nodes[i].coordinates.y = static_cast<float>( rand() % 20 ) - 10.0f;
-    nodes[i].coordinates.z = 0.0f;
-  }
-
-  #ifdef TRAFIKK_ONE_WAY_STREETS_ENABLED
-  // Create a line exiting from every node
-  for (int sourceIndex = 0; sourceIndex < NUMBER_OF_NODES; ++sourceIndex)
-  {
-    int targetIndex = sourceIndex;
-    do
-    {
-      targetIndex = rand() % NUMBER_OF_NODES;
-    } while (targetIndex == sourceIndex);
-
-    // Create the new line
-    Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
-    otherLines.push_back(newLine);
-    nodes[sourceIndex].out.insert(newLine);
-    nodes[targetIndex].in.insert(newLine);
-
-    // Set up the connections for the line
-    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
-        it != nodes[sourceIndex].in.cend(); ++it)
-    {
-      newLine->addIn(*it);
-    }
-    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
-        it != nodes[targetIndex].out.cend(); ++it)
-    {
-      newLine->addOut(*it);
-    }
-  }
-  #endif
-
-  // Create a line entering every node
-  for (int targetIndex = 0; targetIndex < NUMBER_OF_NODES; ++targetIndex)
-  {
-    int sourceIndex = targetIndex;
-    do
-    {
-      sourceIndex = rand() % NUMBER_OF_NODES;
-    } while (sourceIndex == targetIndex);
-
-    // Create the new line
-    Line* newLine = new Line(&controller, &nodes[sourceIndex].coordinates, &nodes[targetIndex].coordinates);
-    otherLines.push_back(newLine);
-    nodes[sourceIndex].out.insert(newLine);
-    nodes[targetIndex].in.insert(newLine);
-
-    // Set up the connections for the line
-    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].in.cbegin();
-        it != nodes[sourceIndex].in.cend(); ++it)
-    {
-      newLine->addIn(*it);
-    }
-    for (std::set<Line*>::const_iterator it = nodes[targetIndex].out.cbegin();
-        it != nodes[targetIndex].out.cend(); ++it)
-    {
-      newLine->addOut(*it);
-    }
-
-    #ifndef TRAFIKK_ONE_WAY_STREETS_ENABLED
-    // Create a line the other way, for getting two lane roads
-    Line* reverseLine = new Line(&controller, &nodes[targetIndex].coordinates, &nodes[sourceIndex].coordinates);
-    otherLines.push_back(reverseLine);
-    nodes[targetIndex].out.insert(reverseLine);
-    nodes[sourceIndex].in.insert(reverseLine);
-
-    // Set up the connections for the reverse line
-    for (std::set<Line*>::const_iterator it = nodes[targetIndex].in.cbegin();
-        it != nodes[targetIndex].in.cend(); ++it)
-    {
-      reverseLine->addIn(*it);
-    }
-    for (std::set<Line*>::const_iterator it = nodes[sourceIndex].out.cbegin();
-        it != nodes[sourceIndex].out.cend(); ++it)
-    {
-      reverseLine->addOut(*it);
-    }
-    #endif
-  }
-
-#if DEBUG_PRINTOUT_FOR_THE_NODES 
-  // Debug printout for the nodes
-  for (int nodeIndex = 0; nodeIndex < NUMBER_OF_NODES; ++nodeIndex)
-  {
-    std::cout << "Node " << nodeIndex << ": " << std::endl;
-    std::cout << "\tIn:" << std::endl;
-    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].in.cbegin();
-        lineIt != nodes[nodeIndex].in.cend(); ++lineIt)
-    {
-      std::cout << "\t\t" << *lineIt << std::endl;
-    }
-    std::cout << "\tOut:" << std::endl;
-    for (std::set<Line*>::const_iterator lineIt = nodes[nodeIndex].out.cbegin();
-        lineIt != nodes[nodeIndex].out.cend(); ++lineIt)
-    {
-      std::cout << "\t\t" << *lineIt << std::endl;
-    }
-  }
-#endif
+  const bool ONE_WAY_LINES = true;
+  std::vector<Line*> otherLines = createRandomLines(controller, ONE_WAY_LINES);
 
   std::cout << "Total number of vehicles: "
     << Line::totalNumberOfVehicles << std::endl;
