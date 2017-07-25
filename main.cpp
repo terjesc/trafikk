@@ -230,11 +230,12 @@ int main()
   // Initialize ImGui
   ImGui::SFML::Init(window);
 
+#define LIMIT_FRAMERATE 2
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
   {
     window.setVerticalSyncEnabled(false);
-    window.setFramerateLimit(60);
+    window.setFramerateLimit(LIMIT_FRAMERATE);
   }
   else
   {

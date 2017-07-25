@@ -37,7 +37,7 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
                    0.0f };
   }
 
-  m_length = 1000 * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
+  m_length = ZOOM_FACTOR * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
 
   // Add a random number of vehicles
   int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
@@ -45,12 +45,12 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
   std::vector<VehicleInfo> v;
   for (int i = 0; i < numberOfVehicles; ++i)
   {
-    int vehiclePreferedSpeed = SPEED - 10 + (rand() % 21);
+    int vehiclePreferedSpeed = SPEED - 1000 + (rand() % 2001);
     int vehiclePosition = m_length - (i * m_length / numberOfVehicles);
     VehicleInfo vi = {SPEED, vehiclePreferedSpeed, vehiclePosition};
-    vi.color[0] = 0.4f + ((rand() % 500) / 1000.0f);
-    vi.color[1] = 0.4f + ((rand() % 500) / 1000.0f);
-    vi.color[2] = 0.4f + ((rand() % 500) / 1000.0f);
+    vi.color[0] = 0.4f + ((rand() % 50) / 100.0f);
+    vi.color[1] = 0.4f + ((rand() % 50) / 100.0f);
+    vi.color[2] = 0.4f + ((rand() % 50) / 100.0f);
     v.push_back(vi);
   }
   _vehicles.initialize(v);
@@ -133,7 +133,6 @@ void Line::addIn(Line * in)
 {
   if (std::find(m_in.begin(), m_in.end(), in) == m_in.end())
   {
-    std::cout << "addIn: Connecting line " << in << " to line " << this << std::endl;
     m_in.push_back(in);
     in->addOut(this);
   }
@@ -143,7 +142,6 @@ void Line::addOut(Line * out)
 {
   if (std::find(m_out.begin(), m_out.end(), out) == m_out.end())
   {
-    std::cout << "addOut: Connecting line " << this << " to line " << out << std::endl;
     m_out.push_back(out);
     out->addIn(this);
   }
@@ -179,17 +177,18 @@ void Line::tick0()
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
   {
+    VehicleInfo element = *it;
+    int vehicleBrakePoint = pow(element.speed, 2) / (2 * BRAKE_ACCELERATION);
+    
     // Find the relative distance to the car in front
     int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
     Blocker nextVehicle = {INT_MAX,INT_MAX};
-    
-    VehicleInfo element = *it;
     
     if (vehicleIndex == 0)
     {
       if (!m_out.empty())
       {
-        nextVehicle = m_out[0]->getBlocker(500);
+        nextVehicle = m_out[0]->getBlocker(vehicleBrakePoint + (2 * element.speed));
       }
       if (nextVehicle.distance != INT_MAX)
       {
@@ -202,30 +201,47 @@ void Line::tick0()
       nextVehicle.distance = _vehicles.NOW()[vehicleIndex - 1].position - element.position - VEHICLE_LENGTH;
     }
 
-    int myBrakePoint = element.speed * element.speed / 2;
-    int nextBrakePoint = nextVehicle.distance + (nextVehicle.speed * nextVehicle.speed / 2);
+    int nextBrakePoint;
+    
+    if (nextVehicle.distance == INT_MAX)
+    {
+      nextBrakePoint = INT_MAX;
+    }
+    else
+    {
+      nextBrakePoint = nextVehicle.distance + (pow(nextVehicle.speed, 2) / (2 * BRAKE_ACCELERATION));
+    }
 
-    if (myBrakePoint + (std::pow(element.speed, 2) / 2) >= nextBrakePoint && element.speed > 0)
+    if (vehicleBrakePoint + element.speed >= nextBrakePoint && element.speed > 0)
     {
       // We may collide! Brake!
-      element.speed -= 1;
+      element.speed -= BRAKE_ACCELERATION;
+      if (element.speed < 0)
+      {
+        element.speed = 0;
+      }
     }
-    else if ((myBrakePoint + (2 * element.speed) + 1) < (nextBrakePoint - 1))
+    else if ((vehicleBrakePoint + element.speed + SPEEDUP_ACCELERATION)
+        < std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
     {
       // Next vehicle is far away! We may increase our speed if we want to.
       if (element.speed < element.preferredSpeed)
       {
-        element.speed += 1;
+        element.speed += SPEEDUP_ACCELERATION;
+        if (element.speed > element.preferredSpeed)
+        {
+          element.speed = element.preferredSpeed;
+        }
       }
     }
     else if (element.speed > element.preferredSpeed)
     {
       // We go faster than we want to! Brake!
-      element.speed -= 1;
+      element.speed -= BRAKE_ACCELERATION;
     }
 
 
-    // TODO: We need some sort of addressing/indexing of the vehicles,
+    // TODO: We may need some sort of addressing/indexing of the vehicles,
     //       for an easy way to find nearby vehicles.
 
     element.position = element.position + element.speed;
@@ -239,9 +255,12 @@ void Line::tick0()
       // Move overflowing vehicles to next line
       element.position -= m_length;
       // TODO choose out line to put the vehicle,
-      //      currently hard coded to the first slot.
+      //      currently random.
       if (!m_out.empty())
       {
+        // TODO Vehicle delivery should choose recursively down the path,
+        //      for the situations where the vehicle is to "skip"
+        //      one or more following (too short) lines.
         m_out[rand() % m_out.size()]->deliverVehicle(this, element);
       }
     }
@@ -251,18 +270,39 @@ void Line::tick0()
 void Line::tick1()
 {
   // Fetch all incoming vehicles from inbox
-  // FIXME: Terminology: "Inbox" is used both for single inbox (it_inbox)
-  //        and map of all inboxes (m_vehicleInbox).
-  for (std::map<Line*, std::vector<VehicleInfo> >::iterator it_inbox
-        = m_vehicleInbox.begin();
-      it_inbox != m_vehicleInbox.end(); ++it_inbox)
+  // FIXME Terminology: "Inbox" is used both for single inbox (it_inbox)
+  //       and map of all inboxes (m_vehicleInbox).
+  
+  // Pick incoming vehicles in sorted order
+  std::map<Line*, std::vector<VehicleInfo> >::iterator lineInFrontIt = m_vehicleInbox.begin();
+  while (lineInFrontIt != m_vehicleInbox.end())
   {
-    for (std::vector<VehicleInfo>::iterator it_element = it_inbox->second.begin();
-        it_element != it_inbox->second.end(); ++it_element)
+    for (std::map<Line*, std::vector<VehicleInfo> >::iterator lineIt
+        = m_vehicleInbox.begin(); lineIt != m_vehicleInbox.end(); lineIt++)
     {
-      addVehicle(*it_element);
+      if (lineIt->second.empty())
+      {
+        continue;
+      }
+      if (lineInFrontIt->second.empty())
+      {
+        lineInFrontIt = lineIt;
+      }
+      else if (lineIt->second.rbegin()->position > lineInFrontIt->second.rbegin()->position)
+      {
+        lineInFrontIt = lineIt;
+      }
     }
-    it_inbox->second.clear();
+    
+    if (lineInFrontIt != m_vehicleInbox.end() && !lineInFrontIt->second.empty())
+    {
+      addVehicle(*lineInFrontIt->second.rbegin());
+      lineInFrontIt->second.pop_back();
+    }
+    else
+    {
+      break;
+    }
   }
 
   // Update blocker
@@ -307,6 +347,9 @@ void Line::draw()
 
   float angle = std::atan2(m_endPoint.y - m_beginPoint.y, m_endPoint.x - m_beginPoint.x);
   // Draw vehicles
+  const float SCALED_VEHICLE_HEIGHT = static_cast<float>(VEHICLE_HEIGHT) / ZOOM_FACTOR;
+  const float HALF_VEHICLE_LENGTH = static_cast<float>(VEHICLE_LENGTH) / 2.0f / ZOOM_FACTOR;
+  const float HALF_VEHICLE_WIDTH = static_cast<float>(VEHICLE_WIDTH) / 2.0f / ZOOM_FACTOR;
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
   {
@@ -321,12 +364,12 @@ void Line::draw()
     glTranslatef(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z);
     glRotatef(angle * 180 / M_PI, 0.0f, 0.0f, 1.0f);
     glBegin(GL_TRIANGLE_FAN);
-    glVertex3f(0.0f, 0.0f, 0.2f);
-    glVertex3f( 0.15f,  0.075f, 0.0f);
-    glVertex3f(-0.15f,  0.075f, 0.0f);
-    glVertex3f(-0.15f, -0.075f, 0.0f);
-    glVertex3f( 0.15f, -0.075f, 0.0f);
-    glVertex3f( 0.15f,  0.075f, 0.0f);
+    glVertex3f(0.0f, 0.0f, SCALED_VEHICLE_HEIGHT);
+    glVertex3f( HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f(-HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f(-HALF_VEHICLE_LENGTH, -HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f( HALF_VEHICLE_LENGTH, -HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f( HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
     glEnd();
     glPopMatrix();
   }
@@ -342,8 +385,8 @@ void Line::moveRight(float distance)
 {
   // Move line slightly to its right, to separate two-way traffic
   Coordinates unitVector;
-  unitVector.x = (m_endPoint.x - m_beginPoint.x) * 1000 / m_length;
-  unitVector.y = (m_endPoint.y - m_beginPoint.y) * 1000 / m_length;
+  unitVector.x = (m_endPoint.x - m_beginPoint.x) * ZOOM_FACTOR / m_length;
+  unitVector.y = (m_endPoint.y - m_beginPoint.y) * ZOOM_FACTOR / m_length;
   unitVector.z = 0.0f;
 
   Coordinates normalVector;

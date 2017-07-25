@@ -7,8 +7,15 @@
 #include <map>
 
 const int AVERAGE_NUMBER_OF_VEHICLES = 2;
-const int SPEED = 50;
-const int VEHICLE_LENGTH = 500;
+const int SPEED = 14000;
+const int VEHICLE_LENGTH = 4000;
+const int VEHICLE_HEIGHT = 1750;
+const int VEHICLE_WIDTH = 1750;
+
+const int BRAKE_ACCELERATION = 3500;
+const int SPEEDUP_ACCELERATION = 1500;
+
+const int ZOOM_FACTOR = 10000.0f;
 
 struct Blocker
 {
