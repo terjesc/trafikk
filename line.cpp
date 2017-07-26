@@ -123,8 +123,22 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
     result = MAINTAIN;
   }
 
-  // TODO: Perform backward search on incoming lines,
-  // according to yield status.
+  // Perform backward search on incoming lines,
+  // TODO according to yield status.
+  for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+      inboundLineIt != m_in.cend(); ++inboundLineIt)
+  {
+    SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle);
+
+    if (nestedResult == BRAKE)
+    {
+      return BRAKE;
+    }
+    else if (nestedResult == MAINTAIN)
+    {
+      result = MAINTAIN;
+    }
+  }
 
   // Provided that the search shall go on,
   // perform forward search on all outgoing lines.
@@ -159,7 +173,7 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
  */
 SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle)
 {
-  return BRAKE;
+  return INCREASE;
 }
 
 void Line::addIn(Line * in)
