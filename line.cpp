@@ -84,97 +84,43 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
   }
 }
 
-Blocker Line::getBlocker(int maxDistance)
-{
-
-  if (!_vehicles.NOW().empty()) // We have a blocker in this line
-  {
-    if (_blocker.NOW().distance > maxDistance) // But too far down the road
-    {
-      Blocker infiniteBlocker = {INT_MAX,INT_MAX};
-      return  infiniteBlocker;
-    }
-    else
-    {
-      return _blocker.NOW();
-    }
-  }
-  else // No blocker in this line
-  {
-    if (m_length > maxDistance) // The search "times out" in this line
-    {
-      Blocker infiniteBlocker = {INT_MAX,INT_MAX};
-      return infiniteBlocker;
-    }
-    else if (m_out.empty()) // No outbound lines for continuing the search
-    {
-      Blocker infiniteBlocker = {INT_MAX,INT_MAX};
-      return infiniteBlocker;
-    }
-    else // Continue the search on outbound lines
-    {
-      // Get blockers from all outbound lines
-      std::vector<Blocker> blockers;
-      for (std::vector<Line*>::const_iterator outboundLineIt = m_out.cbegin();
-          outboundLineIt != m_out.cend(); ++outboundLineIt)
-      {
-        blockers.push_back((*outboundLineIt)->getBlocker(maxDistance - m_length));
-      }
-
-      // Choose the closest blocker
-      // TODO There may be a better choice, taking speed into account as well
-      Blocker blocker = {INT_MAX,INT_MAX};
-      for (std::vector<Blocker>::const_iterator blockerIt = blockers.cbegin();
-          blockerIt != blockers.cend(); ++blockerIt)
-      {
-        if (blockerIt->distance < blocker.distance)
-        {
-          blocker = *blockerIt;
-        }
-      }
-
-      // Final calculation
-      if (blocker.distance <= INT_MAX - m_length)
-      {
-        blocker.distance = blocker.distance + m_length;
-      }
-      return blocker;
-    }
-  }
-}
-
 /*
  * Forward search for whether a vehicle may accelerate or must brake
  *
  * requestingVehicle.position relative to this line
  */
-SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle)
+SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestingVehicleIndex)
 {
   SpeedAction result = INCREASE;
+
   int brakeLength = pow(requestingVehicle.speed, 2) / (2 * BRAKE_ACCELERATION);
   int brakePoint = requestingVehicle.distance + brakeLength;
   int searchPoint = brakePoint + (2 * requestingVehicle.speed);
 
   // Check for vehicles to yield for in this line
-  if (!_vehicles.NOW().empty()) // We have a blocker in this line
+  int nextBrakePoint = INT_MAX;
+  if (requestingVehicleIndex == -1 // The requesting vehicle is external to this line,
+      && !_vehicles.NOW().empty() // and there is a blocker in this line
+      && _blocker.NOW().distance < searchPoint) // within search distance
   {
-    if (_blocker.NOW().distance < searchPoint) // And it is within search distance
-    {
-      // Calculate action based on the blocker
-      int nextBrakePoint = _blocker.NOW().distance + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
+    nextBrakePoint = _blocker.NOW().distance + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
+  }
+  else if (requestingVehicleIndex > 0 // The requesting vehicle is in this line (but not first)
+      && requestingVehicleIndex < static_cast<int>(_vehicles.NOW().size()))
+  {
+    nextBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2) / (2 * BRAKE_ACCELERATION));
+  }
 
-      if (brakePoint + requestingVehicle.speed >= nextBrakePoint)
-      {
-        // Must brake in order not to risk colliding
-        return BRAKE;
-      }
-      else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION)
-          >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
-      {
-        // May not safely increase the speed
-        result = MAINTAIN;
-      }
-    }
+  if (brakePoint + requestingVehicle.speed >= nextBrakePoint)
+  {
+    // Must brake in order not to risk colliding
+    return BRAKE;
+  }
+  else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION)
+      >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+  {
+    // May not safely increase the speed
+    result = MAINTAIN;
   }
 
   // TODO: Perform backward search on incoming lines,
@@ -264,83 +210,46 @@ void Line::tick0()
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
   {
-    VehicleInfo element = *it;
-    int vehicleBrakePoint = pow(element.speed, 2) / (2 * BRAKE_ACCELERATION);
-    
-    // Find the relative distance to the car in front
     int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
-    Blocker nextVehicle = {INT_MAX,INT_MAX};
-    
-    if (vehicleIndex == 0)
-    {
-      if (!m_out.empty())
-      {
-        nextVehicle = m_out[0]->getBlocker(vehicleBrakePoint + (2 * element.speed));
-      }
-      if (nextVehicle.distance != INT_MAX)
-      {
-        nextVehicle.distance += (m_length - element.position);
-      }
-    }
-    else
-    {
-      nextVehicle.speed = _vehicles.NOW()[vehicleIndex - 1].speed;
-      nextVehicle.distance = _vehicles.NOW()[vehicleIndex - 1].position - element.position - VEHICLE_LENGTH;
-    }
+   
+    VehicleInfo newVehicle = *it;
 
-    int nextBrakePoint;
-    
-    if (nextVehicle.distance == INT_MAX)
+    Blocker vehicle;
+    vehicle.speed = newVehicle.speed;
+    vehicle.distance = newVehicle.position;
+    switch (forwardGetSpeedAction(vehicle, vehicleIndex))
     {
-      nextBrakePoint = INT_MAX;
-    }
-    else
-    {
-      nextBrakePoint = nextVehicle.distance + (pow(nextVehicle.speed, 2) / (2 * BRAKE_ACCELERATION));
-    }
-
-    if (vehicleBrakePoint + element.speed >= nextBrakePoint && element.speed > 0)
-    {
-      // We may collide! Brake!
-      element.speed -= BRAKE_ACCELERATION;
-      if (element.speed < 0)
-      {
-        element.speed = 0;
-      }
-    }
-    else if ((vehicleBrakePoint + element.speed + SPEEDUP_ACCELERATION)
-        < std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
-    {
-      // Next vehicle is far away! We may increase our speed if we want to.
-      if (element.speed < element.preferredSpeed)
-      {
-        element.speed += SPEEDUP_ACCELERATION;
-        if (element.speed > element.preferredSpeed)
+      case BRAKE:
+        newVehicle.speed -= BRAKE_ACCELERATION;
+        if (newVehicle.speed < 0)
         {
-          element.speed = element.preferredSpeed;
+          newVehicle.speed = 0;
         }
-      }
+        break;
+      case INCREASE:
+        newVehicle.speed += SPEEDUP_ACCELERATION;
+        if (newVehicle.speed > newVehicle.preferredSpeed)
+        {
+          newVehicle.speed = newVehicle.preferredSpeed;
+        }
+        break;
+      default:
+        break;
     }
-    else if (element.speed > element.preferredSpeed)
-    {
-      // We go faster than we want to! Brake!
-      element.speed -= BRAKE_ACCELERATION;
-    }
-
 
     // TODO: We may need some sort of addressing/indexing of the vehicles,
     //       for an easy way to find nearby vehicles.
 
-    element.position = element.position + element.speed;
+    newVehicle.position += newVehicle.speed;
     
-    if (element.position < m_length)
+    if (newVehicle.position < m_length)
     {
-      _vehicles.THEN().push_back(element);
+      _vehicles.THEN().push_back(newVehicle);
     }
     else
     {
       // Move overflowing vehicles to next line
-      element.position -= m_length;
+      newVehicle.position -= m_length;
       // TODO choose out line to put the vehicle,
       //      currently random.
       if (!m_out.empty())
@@ -348,7 +257,7 @@ void Line::tick0()
         // TODO Vehicle delivery should choose recursively down the path,
         //      for the situations where the vehicle is to "skip"
         //      one or more following (too short) lines.
-        m_out[rand() % m_out.size()]->deliverVehicle(this, element);
+        m_out[rand() % m_out.size()]->deliverVehicle(this, newVehicle);
       }
     }
   }
