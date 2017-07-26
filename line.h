@@ -6,7 +6,7 @@
 #include <vector>
 #include <map>
 
-const int AVERAGE_NUMBER_OF_VEHICLES = 2;
+const int AVERAGE_NUMBER_OF_VEHICLES = 1;
 const int SPEED = 14000;
 const int VEHICLE_LENGTH = 4000;
 const int VEHICLE_HEIGHT = 1750;

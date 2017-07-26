@@ -112,7 +112,7 @@ Blocker Line::getBlocker(int maxDistance)
 
       // Choose the closest blocker
       // TODO There may be a better choice, taking speed into account as well
-      Blocker blocker;
+      Blocker blocker = {INT_MAX,INT_MAX};
       for (std::vector<Blocker>::const_iterator blockerIt = blockers.cbegin();
           blockerIt != blockers.cend(); ++blockerIt)
       {
@@ -123,7 +123,10 @@ Blocker Line::getBlocker(int maxDistance)
       }
 
       // Final calculation
-      blocker.distance = blocker.distance + m_length;
+      if (blocker.distance <= INT_MAX - m_length)
+      {
+        blocker.distance = blocker.distance + m_length;
+      }
       return blocker;
     }
   }
