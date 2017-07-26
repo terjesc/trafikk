@@ -111,12 +111,12 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
     nextBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2) / (2 * BRAKE_ACCELERATION));
   }
 
-  if (brakePoint + requestingVehicle.speed >= nextBrakePoint)
+  if ((brakePoint + requestingVehicle.speed + VEHICLE_LENGTH) >= nextBrakePoint)
   {
     // Must brake in order not to risk colliding
     return BRAKE;
   }
-  else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION)
+  else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
       >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
   {
     // May not safely increase the speed
