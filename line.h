@@ -6,8 +6,8 @@
 #include <vector>
 #include <map>
 
-const int AVERAGE_NUMBER_OF_VEHICLES = 1;
-const int SPEED = 14000;
+const int AVERAGE_NUMBER_OF_VEHICLES = 2;
+const int SPEED = 16667; // 16667 mm/s = 60 km/h
 const int VEHICLE_LENGTH = 4000;
 const int VEHICLE_HEIGHT = 1750;
 const int VEHICLE_WIDTH = 1750;
@@ -16,6 +16,13 @@ const int BRAKE_ACCELERATION = 3500;
 const int SPEEDUP_ACCELERATION = 1500;
 
 const int ZOOM_FACTOR = 10000.0f;
+
+enum SpeedAction
+{
+  BRAKE,
+  MAINTAIN,
+  INCREASE
+};
 
 struct Blocker
 {
@@ -56,7 +63,11 @@ class Line : public ControllerUser
 
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
+
     Blocker getBlocker(int maxDistance);
+    SpeedAction forwardGetSpeedAction(Blocker requestingVehicle);
+    SpeedAction backwardGetSpeedAction(Blocker requestingVehicle);
+
     void addIn(Line * in);
     void addOut(Line * out);
     int getLength();

@@ -143,6 +143,79 @@ Blocker Line::getBlocker(int maxDistance)
   }
 }
 
+/*
+ * Forward search for whether a vehicle may accelerate or must brake
+ *
+ * requestingVehicle.position relative to this line
+ */
+SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle)
+{
+  SpeedAction result = INCREASE;
+  int brakeLength = pow(requestingVehicle.speed, 2) / (2 * BRAKE_ACCELERATION);
+  int brakePoint = requestingVehicle.distance + brakeLength;
+  int searchPoint = brakePoint + (2 * requestingVehicle.speed);
+
+  // Check for vehicles to yield for in this line
+  if (!_vehicles.NOW().empty()) // We have a blocker in this line
+  {
+    if (_blocker.NOW().distance < searchPoint) // And it is within search distance
+    {
+      // Calculate action based on the blocker
+      int nextBrakePoint = _blocker.NOW().distance + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
+
+      if (brakePoint + requestingVehicle.speed >= nextBrakePoint)
+      {
+        // Must brake in order not to risk colliding
+        return BRAKE;
+      }
+      else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION)
+          >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+      {
+        // May not safely increase the speed
+        result = MAINTAIN;
+      }
+    }
+  }
+
+  // TODO: Perform backward search on incoming lines,
+  // according to yield status.
+
+  // Provided that the search shall go on,
+  // perform forward search on all outgoing lines.
+  if (searchPoint > m_length)
+  {
+    Blocker vehicleToPassOn = requestingVehicle;
+    vehicleToPassOn.distance -= m_length;
+
+    for (std::vector<Line*>::const_iterator outboundLineIt = m_out.cbegin();
+          outboundLineIt != m_out.cend(); ++outboundLineIt)
+    {
+      SpeedAction nestedResult = (*outboundLineIt)->forwardGetSpeedAction(vehicleToPassOn);
+
+      if (nestedResult == BRAKE)
+      {
+        return BRAKE;
+      }
+      else if (nestedResult == MAINTAIN)
+      {
+        result = MAINTAIN;
+      }
+    }
+  }
+
+  return result;
+}
+
+/*
+ * Backward search for whether a vehicle may accelerate or must brake
+ *
+ * requestingVehicle.position relative to this line
+ */
+SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle)
+{
+  return BRAKE;
+}
+
 void Line::addIn(Line * in)
 {
   if (std::find(m_in.begin(), m_in.end(), in) == m_in.end())
