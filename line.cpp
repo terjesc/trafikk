@@ -70,7 +70,18 @@ void Line::addVehicle(VehicleInfo vehicleInfo)
 
 void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
 {
-  m_vehicleInbox[senderLine].push_back(vehicleInfo);
+  if (vehicleInfo.position < m_length)
+  {
+    m_vehicleInbox[senderLine].push_back(vehicleInfo);
+  }
+  else
+  {
+    vehicleInfo.position -= m_length;
+    if (!m_out.empty())
+    {
+      m_out[rand() % m_out.size()]->deliverVehicle(senderLine, vehicleInfo);
+    }
+  }
 }
 
 Blocker Line::getBlocker(int maxDistance)
