@@ -87,7 +87,7 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
 /*
  * Forward search for whether a vehicle may accelerate or must brake
  *
- * requestingVehicle.position relative to this line
+ * requestingVehicle.distance relative to this line
  */
 SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, int requestingVehicleIndex)
 {
@@ -176,11 +176,103 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* request
 /*
  * Backward search for whether a vehicle may accelerate or must brake
  *
- * requestingVehicle.position relative to this line
+ * requestingVehicle.distance relative to the end of this line
  */
 SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine)
 {
-  return INCREASE;
+  // The search should have started with the requesting line,
+  // so if we get back to the requesting line we can safely
+  // return the "best case" action.
+  if (requestingLine == this)
+  {
+    return INCREASE;
+  }
+
+  // Default to increase speed.
+  SpeedAction result = INCREASE;
+
+  // Adjust position so that the requesting line is relative to
+  // the beginning of this line, not to the end.
+  requestingVehicle.distance += m_length;
+
+  // For now, always act in a cooperative fashion.
+  // I.e. search for blockers in front of the position of
+  // the requesting vehicle.
+  if (requestingVehicle.distance > m_length)
+  {
+    // The corresponding position is after the end of this line.
+    // Nothing blocking here.
+    // TODO For yielding behaviour there might be blockers here (future feature.)
+    return INCREASE;
+  }
+  else if (requestingVehicle.distance < 0)
+  {
+    // The corresponding position is before the beginning of this line.
+    // First, check with all inbound lines.
+    for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+          inboundLineIt != m_in.cend(); ++inboundLineIt)
+    {
+      SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine);
+
+      if (nestedResult == BRAKE)
+      {
+        return BRAKE;
+      }
+      else if (nestedResult == MAINTAIN)
+      {
+        result = MAINTAIN;
+      }
+    }
+
+    //  Second, check with this blocker, as it might be relevant
+    if (!_vehicles.NOW().empty())
+    {
+      int brakeLength = pow(requestingVehicle.speed, 2) / (2 * BRAKE_ACCELERATION);
+      int brakePoint = requestingVehicle.distance + brakeLength;
+      int nextBrakePoint = _blocker.NOW().distance + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
+      if ((brakePoint + requestingVehicle.speed + VEHICLE_LENGTH) >= nextBrakePoint)
+      {
+        // Must brake in order not to risk colliding
+        return BRAKE;
+      }
+      else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+          >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+      {
+        // May not safely increase the speed
+        result = MAINTAIN;
+      }
+    }
+  }
+  else
+  {
+    // The corresponding position is on this line.
+    // Find and act on the first vehicle after the corresponding position.
+    for (std::vector<VehicleInfo>::const_reverse_iterator vehicleIt = _vehicles.NOW().crbegin();
+        vehicleIt != _vehicles.NOW().crend(); ++vehicleIt)
+    {
+      if (vehicleIt->position > requestingVehicle.distance)
+      {
+        int brakeLength = pow(requestingVehicle.speed, 2) / (2 * BRAKE_ACCELERATION);
+        int brakePoint = requestingVehicle.distance + brakeLength;
+        int nextBrakePoint = vehicleIt->position + (pow(vehicleIt->speed, 2) / (2 * BRAKE_ACCELERATION));
+        if ((brakePoint + requestingVehicle.speed + VEHICLE_LENGTH) >= nextBrakePoint)
+        {
+          // Must brake in order not to risk colliding
+          return BRAKE;
+        }
+        else if ((brakePoint + requestingVehicle.speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+            >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+        {
+          // May not safely increase the speed
+          result = MAINTAIN;
+        }
+
+        break; // We are finished, as we found and handled the closest vehicle.
+      }
+    }
+  }
+
+  return result;
 }
 
 void Line::addIn(Line * in)
