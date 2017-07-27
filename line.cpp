@@ -95,7 +95,7 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* request
 
   int brakeLength = pow(requestingVehicle.speed, 2) / (2 * BRAKE_ACCELERATION);
   int brakePoint = requestingVehicle.distance + brakeLength;
-  int searchPoint = brakePoint + (2 * requestingVehicle.speed);
+  int searchPoint = brakePoint + (2 * requestingVehicle.speed) + (2 * VEHICLE_LENGTH);
 
   // Check for vehicles to yield for in this line
   int nextBrakePoint = INT_MAX;
