@@ -64,8 +64,8 @@ class Line : public ControllerUser
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
 
-    SpeedAction forwardGetSpeedAction(Blocker requestingVehicle, int requestingVehicleIndex = -1);
-    SpeedAction backwardGetSpeedAction(Blocker requestingVehicle);
+    SpeedAction forwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
+    SpeedAction backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine);
 
     void addIn(Line * in);
     void addOut(Line * out);

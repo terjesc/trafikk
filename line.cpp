@@ -89,7 +89,7 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
  *
  * requestingVehicle.position relative to this line
  */
-SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestingVehicleIndex)
+SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, int requestingVehicleIndex)
 {
   SpeedAction result = INCREASE;
 
@@ -128,7 +128,14 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
   for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
       inboundLineIt != m_in.cend(); ++inboundLineIt)
   {
-    SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle);
+    // Skip the line containing the vehicle itself
+    if (*inboundLineIt == requestingLine)
+    {
+      continue;
+    }
+
+    SpeedAction nestedResult =
+        (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine);
 
     if (nestedResult == BRAKE)
     {
@@ -150,7 +157,7 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
     for (std::vector<Line*>::const_iterator outboundLineIt = m_out.cbegin();
           outboundLineIt != m_out.cend(); ++outboundLineIt)
     {
-      SpeedAction nestedResult = (*outboundLineIt)->forwardGetSpeedAction(vehicleToPassOn);
+      SpeedAction nestedResult = (*outboundLineIt)->forwardGetSpeedAction(vehicleToPassOn, requestingLine);
 
       if (nestedResult == BRAKE)
       {
@@ -171,7 +178,7 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, int requestin
  *
  * requestingVehicle.position relative to this line
  */
-SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle)
+SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine)
 {
   return INCREASE;
 }
@@ -231,7 +238,7 @@ void Line::tick0()
     Blocker vehicle;
     vehicle.speed = newVehicle.speed;
     vehicle.distance = newVehicle.position;
-    switch (forwardGetSpeedAction(vehicle, vehicleIndex))
+    switch (forwardGetSpeedAction(vehicle, this, vehicleIndex))
     {
       case BRAKE:
         newVehicle.speed -= BRAKE_ACCELERATION;
