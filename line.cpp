@@ -123,41 +123,66 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* request
     result = MAINTAIN;
   }
 
-  // Perform backward search on incoming lines,
-  // TODO according to yield status.
-  for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
-      inboundLineIt != m_in.cend(); ++inboundLineIt)
-  {
-    // Skip the line containing the vehicle itself
-    if (*inboundLineIt == requestingLine)
-    {
-      continue;
-    }
-
-    SpeedAction nestedResult =
-        (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine);
-
-    if (nestedResult == BRAKE)
-    {
-      return BRAKE;
-    }
-    else if (nestedResult == MAINTAIN)
-    {
-      result = MAINTAIN;
-    }
-  }
-
-  // Provided that the search shall go on,
-  // perform forward search on all outgoing lines.
+  // Continue searches from end of line,
+  // but only if search does not distance out before that.
   if (searchPoint > m_length)
   {
-    Blocker vehicleToPassOn = requestingVehicle;
-    vehicleToPassOn.distance -= m_length;
+    Blocker vehicleAtEndOfLine = requestingVehicle;
+    vehicleAtEndOfLine.distance -= m_length;
 
+    // Perform backward search on interfering lines,
+    // for yielding for that traffic.
+    for (std::vector<Line*>::const_iterator interferingLineIt = m_interfering.cbegin();
+        interferingLineIt != m_interfering.cend(); ++interferingLineIt)
+    {
+      if (*interferingLineIt == requestingLine)
+      {
+        continue;
+      }
+
+      SpeedAction yieldingResult =
+        (*interferingLineIt)->backwardGetSpeedAction(vehicleAtEndOfLine, requestingLine, true);
+
+      if (yieldingResult == BRAKE)
+      {
+        return BRAKE;
+      }
+      else if (yieldingResult == MAINTAIN)
+      {
+        result = MAINTAIN;
+      }
+    }
+
+    // Perform backward search on cooperating lines,
+    // for mutual merging with that traffic.
+    for (std::vector<Line*>::const_iterator cooperatingLineIt = m_cooperating.cbegin();
+        cooperatingLineIt != m_cooperating.cend(); ++cooperatingLineIt)
+    {
+      // Skip the line containing the vehicle itself.
+      // Otherwise it would brake in order not to collide with itsef...
+      if (*cooperatingLineIt == requestingLine)
+      {
+        continue;
+      }
+
+      SpeedAction mergingResult =
+          (*cooperatingLineIt)->backwardGetSpeedAction(vehicleAtEndOfLine, requestingLine, false);
+
+      if (mergingResult == BRAKE)
+      {
+        return BRAKE;
+      }
+      else if (mergingResult == MAINTAIN)
+      {
+        result = MAINTAIN;
+      }
+    }
+
+    // Perform forward search on all outgoing lines.
     for (std::vector<Line*>::const_iterator outboundLineIt = m_out.cbegin();
           outboundLineIt != m_out.cend(); ++outboundLineIt)
     {
-      SpeedAction nestedResult = (*outboundLineIt)->forwardGetSpeedAction(vehicleToPassOn, requestingLine);
+      SpeedAction nestedResult = (*outboundLineIt)->forwardGetSpeedAction(vehicleAtEndOfLine, requestingLine);
 
       if (nestedResult == BRAKE)
       {
@@ -178,7 +203,7 @@ SpeedAction Line::forwardGetSpeedAction(Blocker requestingVehicle, Line* request
  *
  * requestingVehicle.distance relative to the end of this line
  */
-SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine)
+SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, bool yield)
 {
   // The search should have started with the requesting line,
   // so if we get back to the requesting line we can safely
@@ -195,15 +220,43 @@ SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* reques
   // the beginning of this line, not to the end.
   requestingVehicle.distance += m_length;
 
-  // For now, always act in a cooperative fashion.
-  // I.e. search for blockers in front of the position of
-  // the requesting vehicle.
+
   if (requestingVehicle.distance > m_length)
   {
     // The corresponding position is after the end of this line.
-    // Nothing blocking here.
-    // TODO For yielding behaviour there might be blockers here (future feature.)
-    return INCREASE;
+    // For yielding behaviour there might be blockers here.
+    if (yield && requestingVehicle.distance < m_length + (pow(SPEED, 2) / (2 * BRAKE_ACCELERATION)))
+    {
+      // If the front vehicle in this line has a brake point further along
+      // than requstingVehicle.distance, then return BRAKE
+      // TODO Change to another rule here: If any behavior of the front vehicle
+      // means that it has to stop for any behavior of the requesting vehicle,
+      // then the requesting vehicle should brake.
+      if (!_vehicles.NOW().empty())
+      {
+        int behindBrakePoint = _vehicles.NOW()[0].position + (pow(_vehicles.NOW()[0].speed, 2) / (2 * BRAKE_ACCELERATION));
+        if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH) >= requestingVehicle.distance)
+        {
+          return BRAKE;
+        }
+      }
+
+      // Continue looping recursively, return BRAKE at once if found.
+      for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+            inboundLineIt != m_in.cend(); ++inboundLineIt)
+      {
+        SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine, yield);
+
+        if (nestedResult == BRAKE)
+        {
+          return BRAKE;
+        }
+        else if (nestedResult == MAINTAIN)
+        {
+          result = MAINTAIN;
+        }
+      }
+    }
   }
   else if (requestingVehicle.distance < 0)
   {
@@ -212,7 +265,7 @@ SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* reques
     for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
           inboundLineIt != m_in.cend(); ++inboundLineIt)
     {
-      SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine);
+      SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine, yield);
 
       if (nestedResult == BRAKE)
       {
@@ -267,6 +320,44 @@ SpeedAction Line::backwardGetSpeedAction(Blocker requestingVehicle, Line* reques
           result = MAINTAIN;
         }
 
+        // If yielding, see if the previous vehicle is also too close
+        if (yield)
+        {
+          if (vehicleIt == _vehicles.NOW().crbegin())
+          {
+            // The vehicle "in front of" is the last vehicle in this line,
+            // so the vehicle "behind" is in an incoming line.
+            for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+                  inboundLineIt != m_in.cend(); ++inboundLineIt)
+            {
+              SpeedAction nestedResult = (*inboundLineIt)->backwardGetSpeedAction(requestingVehicle, requestingLine, yield);
+
+              if (nestedResult == BRAKE)
+              {
+                return BRAKE;
+              }
+              else if (nestedResult == MAINTAIN)
+              {
+                result = MAINTAIN;
+              }
+            }
+          }
+          else
+          {
+            // The vehicle "behind" is in this line.
+            std::vector<VehicleInfo>::const_reverse_iterator vehicleBehindIt = vehicleIt - 1;
+            // TODO Change to another rule here: If any behavior of the front vehicle
+            // means that it has to stop for any behavior of the requesting vehicle,
+            // then the requesting vehicle should brake.
+            int behindBrakePoint = vehicleBehindIt->position + (pow(vehicleBehindIt->speed, 2) / (2 * BRAKE_ACCELERATION));
+            if ((behindBrakePoint + vehicleBehindIt->speed + VEHICLE_LENGTH) >= requestingVehicle.distance)
+            {
+              // The other vehicle may have to brake for us. We can not have that.
+              return BRAKE;
+            }
+          }
+        }
+
         break; // We are finished, as we found and handled the closest vehicle.
       }
     }
@@ -290,6 +381,22 @@ void Line::addOut(Line * out)
   {
     m_out.push_back(out);
     out->addIn(this);
+  }
+}
+
+void Line::addCooperating(Line * cooperating)
+{
+  if (std::find(m_cooperating.begin(), m_cooperating.end(), cooperating) == m_cooperating.end())
+  {
+    m_cooperating.push_back(cooperating);
+  }
+}
+
+void Line::addInterfering(Line * interfering)
+{
+  if (std::find(m_interfering.begin(), m_interfering.end(), interfering) == m_interfering.end())
+  {
+    m_interfering.push_back(interfering);
   }
 }
 
@@ -448,7 +555,21 @@ void Line::draw()
 {
   // Draw the line
   glLineWidth(1.5);
-  glColor3f(0.8f, 0.8f, 1.0f);
+  float red = 0.8;
+  float green = 0.8;
+  float blue = 1.0;
+  if (!m_interfering.empty())
+  {
+    red = 1.0;
+    blue = 0.8;
+  }
+  if (!m_cooperating.empty())
+  {
+    green = 1.0;
+    blue = 0.8;
+  }
+  glColor3f(red, green, blue);
+
   glBegin(GL_LINES);
   glVertex3f(m_beginPoint.x, m_beginPoint.y, m_beginPoint.z);
   glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);

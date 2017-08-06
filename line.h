@@ -51,6 +51,8 @@ class Line : public ControllerUser
     LockStepValue<int> tickNumber;
     std::vector<Line *> m_out;
     std::vector<Line *> m_in;
+    std::vector<Line *> m_cooperating;
+    std::vector<Line *> m_interfering;
     int m_length;
     std::map<Line*, std::vector<VehicleInfo> > m_vehicleInbox;
     Coordinates m_beginPoint, m_endPoint;
@@ -65,10 +67,12 @@ class Line : public ControllerUser
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
 
     SpeedAction forwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
-    SpeedAction backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine);
+    SpeedAction backwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, bool yield = false);
 
     void addIn(Line * in);
     void addOut(Line * out);
+    void addCooperating(Line * cooperating);
+    void addInterfering(Line * interfering);
     int getLength();
     virtual void tick(int tickType);
     void tick0();

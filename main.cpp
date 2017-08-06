@@ -153,7 +153,7 @@ std::vector<Line*> createRandomLines(Controller &controller, bool oneWayLines)
   return lines;
 }
 
-std::vector<Line*> createTestLines(Controller &controller, float centerX, float centerY)
+std::vector<Line*> createMergeTestLines(Controller &controller, float centerX, float centerY, bool yieldEnable = false)
 {
   std::vector<Line*> lines;
 
@@ -174,16 +174,23 @@ std::vector<Line*> createTestLines(Controller &controller, float centerX, float 
   nodes[4].coordinates = {centerX + 8.0f, centerY - 1.0f, 0.0f};
   nodes[5].coordinates = {centerX - 8.0f, centerY - 1.0f, 0.0f};
 
-  int linePaths[] = {0, 1, // source, target,
-                     1, 2,
+  int linePaths[] = {0, 1, // sourceNode, targetNode
+                     1, 2, // line 1, forking from node 1
                      2, 3,
-                     3, 0,
-                     1, 4,
+                     3, 0, // line 3, merging into node 0
+                     1, 4, // line 4, forking from node 1
                      4, 5,
-                     5, 0};
+                     5, 0}; // line 6, merging into node 0
+  const int LINE_COUNT = 7;
+
+  int yieldingLines[] = {6, 3}; // Line 6 should yield for traffic on line 3
+  const int YIELD_COUNT = 1;
+
+  int cooperatingLines[] = {3, 6}; // Line 3 should cooperate with traffic on line 6
+  const int COOPERATE_COUNT = 1;
 
   // Set up lines between the nodes
-  for (int i = 0; i < 7; ++i)
+  for (int i = 0; i < LINE_COUNT; ++i)
   {
     // Fetch node indexes for line begin and end points
     int sourceIndex = linePaths[2 * i];
@@ -212,6 +219,26 @@ std::vector<Line*> createTestLines(Controller &controller, float centerX, float 
     // Push line to return value
     lines.push_back(newLine);
   }
+
+  if (yieldEnable)
+  {
+    for (int i = 0; i < YIELD_COUNT; ++i)
+    {
+      lines[yieldingLines[2*i]]->addInterfering(lines[yieldingLines[2*i +1]]);
+    }
+  }
+  else
+  {
+    for (int i = 0; i < YIELD_COUNT; ++i)
+    {
+      lines[yieldingLines[2*i]]->addCooperating(lines[yieldingLines[2*i +1]]);
+    }
+    for (int i = 0; i < COOPERATE_COUNT; ++i)
+    {
+      lines[cooperatingLines[2*i]]->addCooperating(lines[cooperatingLines[2*i + 1]]);
+    }
+  }
+
   return lines;
 }
 
@@ -287,7 +314,8 @@ int main()
 
   for (float yPos = -8.0f; yPos < 9.0f; yPos += 4.0f)
   {
-    std::vector<Line*> otherLines = createTestLines(controller, 0.0f, yPos);
+    bool yieldEnable = true;
+    std::vector<Line*> otherLines = createMergeTestLines(controller, 0.0f, yPos, yieldEnable);
 
     for (std::vector<Line*>::const_iterator it = otherLines.cbegin();
         it != otherLines.cend(); ++it)
