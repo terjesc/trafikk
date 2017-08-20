@@ -322,25 +322,37 @@ std::vector<Line*> loadTestLines(Controller &controller, std::string fileName)
   for (std::vector<std::pair<int, int> >::const_iterator it = inLines.cbegin();
       it != inLines.cend(); ++it)
   {
-    (lineMap[it->first])->addIn(lineMap[it->second]);
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addIn(lineMap[it->second]);
+    }
   }
 
   for (std::vector<std::pair<int, int> >::const_iterator it = outLines.cbegin();
       it != outLines.cend(); ++it)
   {
-    (lineMap[it->first])->addOut(lineMap[it->second]);
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addOut(lineMap[it->second]);
+    }
   }
 
   for (std::vector<std::pair<int, int> >::const_iterator it = mergeLines.cbegin();
       it != mergeLines.cend(); ++it)
   {
-    (lineMap[it->first])->addCooperating(lineMap[it->second]);
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addCooperating(lineMap[it->second]);
+    }
   }
 
   for (std::vector<std::pair<int, int> >::const_iterator it = yieldLines.cbegin();
       it != yieldLines.cend(); ++it)
   {
-    (lineMap[it->first])->addInterfering(lineMap[it->second]);
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addInterfering(lineMap[it->second]);
+    }
   }
 
   std::vector<Line*> lines;
@@ -370,7 +382,7 @@ int main()
   // Initialize ImGui
   ImGui::SFML::Init(window);
 
-#define LIMIT_FRAMERATE 2
+#define LIMIT_FRAMERATE 10
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
   {
@@ -425,7 +437,7 @@ int main()
 
   std::vector<Line*> lines;
 
-  for (float yPos = -8.0f; yPos < 9.0f; yPos += 4.0f)
+  for (float yPos = 4.0f; yPos < 9.0f; yPos += 4.0f)
   {
     bool yieldEnable = true;
     std::vector<Line*> otherLines = createMergeTestLines(controller, 0.0f, yPos, yieldEnable);

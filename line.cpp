@@ -40,7 +40,14 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
   m_length = ZOOM_FACTOR * sqrt(pow(m_beginPoint.x - m_endPoint.x, 2) + pow(m_beginPoint.y - m_endPoint.y, 2));
 
   // Add a random number of vehicles
-  int numberOfVehicles = rand() % (1 + (2 * AVERAGE_NUMBER_OF_VEHICLES));
+  int numberOfVehicles = m_length / AVERAGE_ROAD_LENGTH_PER_VEHICLE;
+  int roadFractionLeft = m_length % AVERAGE_ROAD_LENGTH_PER_VEHICLE;
+  if (rand() % AVERAGE_ROAD_LENGTH_PER_VEHICLE < roadFractionLeft)
+  {
+    numberOfVehicles += 1;
+  }
+  numberOfVehicles = rand() % (1 + (2 * numberOfVehicles));
+
   totalNumberOfVehicles += numberOfVehicles;
   std::vector<VehicleInfo> v;
   for (int i = 0; i < numberOfVehicles; ++i)

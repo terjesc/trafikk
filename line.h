@@ -6,8 +6,9 @@
 #include <vector>
 #include <map>
 
-const int AVERAGE_NUMBER_OF_VEHICLES = 2;
-const int SPEED = 16667; // 16667 mm/s = 60 km/h
+const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 100000;
+const int MMPS_PER_KMPH = 278; // km/h to mm/s conversion factor
+const int SPEED = 30 * MMPS_PER_KMPH;
 const int VEHICLE_LENGTH = 4000;
 const int VEHICLE_HEIGHT = 1750;
 const int VEHICLE_WIDTH = 1750;
@@ -15,7 +16,7 @@ const int VEHICLE_WIDTH = 1750;
 const int BRAKE_ACCELERATION = 3500;
 const int SPEEDUP_ACCELERATION = 1500;
 
-const int ZOOM_FACTOR = 10000.0f;
+const int ZOOM_FACTOR = 5000.0f;
 
 enum SpeedAction
 {
