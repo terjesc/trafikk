@@ -20,6 +20,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <string>
+#include <sstream>
+#include <fstream>
 
 #include "startup_sound.h"
 
@@ -242,6 +245,116 @@ std::vector<Line*> createMergeTestLines(Controller &controller, float centerX, f
   return lines;
 }
 
+std::vector<Line*> loadTestLines(Controller &controller, std::string fileName)
+{
+  std::map<int, Line*> lineMap;
+  std::vector<std::pair<int, int> > inLines;
+  std::vector<std::pair<int, int> > outLines;
+  std::vector<std::pair<int, int> > mergeLines;
+  std::vector<std::pair<int, int> > yieldLines;
+
+  std::string line;
+  std::ifstream lineFile(fileName.c_str());
+
+  while (std::getline(lineFile, line))
+  {
+    if (line.length() == 0 || line[0] == '#')
+    {
+      continue;
+    }
+
+    std::stringstream lineStream;
+    lineStream << line;
+
+    int lineNumber;
+    lineStream >> lineNumber;
+
+    Coordinates begin, end;
+
+    lineStream >> begin.x;
+    lineStream >> begin.y;
+    lineStream >> begin.z;
+    lineStream >> end.x;
+    lineStream >> end.y;
+    lineStream >> end.z;
+
+    Line *newLine = new Line(&controller, begin, end);
+    lineMap.insert(std::pair<int,Line*>(lineNumber, newLine));
+
+    int inCount;
+    lineStream >> inCount;
+    for (int i = 0; i < inCount; ++i)
+    {
+      int inLine;
+      lineStream >> inLine;
+      inLines.push_back(std::pair<int, int>(lineNumber, inLine));
+    }
+
+    int outCount;
+    lineStream >> outCount;
+    for (int i = 0; i < outCount; ++i)
+    {
+      int outLine;
+      lineStream >> outLine;
+      outLines.push_back(std::pair<int, int>(lineNumber, outLine));
+    }
+
+    int mergeCount;
+    lineStream >> mergeCount;
+    for (int i = 0; i < mergeCount; ++i)
+    {
+      int mergeLine;
+      lineStream >> mergeLine;
+      mergeLines.push_back(std::pair<int, int>(lineNumber, mergeLine));
+    }
+
+    int yieldCount;
+    lineStream >> yieldCount;
+    for (int i = 0; i < yieldCount; ++i)
+    {
+      int yieldLine;
+      lineStream >> yieldLine;
+      yieldLines.push_back(std::pair<int, int>(lineNumber, yieldLine));
+    }
+  }
+  lineFile.close();
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = inLines.cbegin();
+      it != inLines.cend(); ++it)
+  {
+    (lineMap[it->first])->addIn(lineMap[it->second]);
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = outLines.cbegin();
+      it != outLines.cend(); ++it)
+  {
+    (lineMap[it->first])->addOut(lineMap[it->second]);
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = mergeLines.cbegin();
+      it != mergeLines.cend(); ++it)
+  {
+    (lineMap[it->first])->addCooperating(lineMap[it->second]);
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = yieldLines.cbegin();
+      it != yieldLines.cend(); ++it)
+  {
+    (lineMap[it->first])->addInterfering(lineMap[it->second]);
+  }
+
+  std::vector<Line*> lines;
+
+  for (std::map<int, Line*>::const_iterator lineIt = lineMap.cbegin();
+      lineIt != lineMap.cend(); ++lineIt)
+  {
+    lines.push_back(lineIt->second);
+  }
+
+  return lines;
+}
+
+
 int main()
 {
   sf::ContextSettings contextSettings;
@@ -322,6 +435,14 @@ int main()
     {
       lines.push_back(*it);
     }
+  }
+
+  // Load lines from file
+  std::vector<Line*> testLines = loadTestLines(controller, "../testbane.txt");
+  for (std::vector<Line*>::const_iterator it = testLines.cbegin();
+      it != testLines.cend(); ++it)
+  {
+    lines.push_back(*it);
   }
 
   std::cout << "Total number of vehicles: "
