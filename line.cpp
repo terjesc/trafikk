@@ -72,7 +72,7 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
 {
   if (vehicleInfo.position < m_length)
   {
-    m_vehicleInbox[senderLine].push_back(vehicleInfo);
+    m_vehicleInboxes[senderLine].push_back(vehicleInfo);
   }
   else
   {
@@ -316,9 +316,6 @@ SpeedAction Line::backwardYieldGetSpeedAction(Blocker requestingVehicle,
     {
       // If the front vehicle in this line has a brake point further along
       // than requstingVehicle.distance, then return BRAKE
-      // TODO Change to another rule here: If any behavior of the front vehicle
-      // means that it has to stop for any behavior of the requesting vehicle,
-      // then the requesting vehicle should brake.
       if (!_vehicles.NOW().empty())
       {
         int behindBrakePoint = _vehicles.NOW()[0].position
@@ -436,9 +433,6 @@ SpeedAction Line::backwardYieldGetSpeedAction(Blocker requestingVehicle,
           {
             // The vehicle "behind" is in this line.
             std::vector<VehicleInfo>::const_reverse_iterator vehicleBehindIt = vehicleIt - 1;
-            // TODO Change to another rule here: If any behavior of the front vehicle
-            // means that it has to stop for any behavior of the requesting vehicle,
-            // then the requesting vehicle should brake.
             int behindBrakePoint = vehicleBehindIt->position
                                  + (pow(vehicleBehindIt->speed, 2)
                                    / (2 * BRAKE_ACCELERATION));
@@ -551,9 +545,6 @@ void Line::tick0()
         break;
     }
 
-    // TODO: We may need some sort of addressing/indexing of the vehicles,
-    //       for an easy way to find nearby vehicles.
-
     newVehicle.position += newVehicle.speed;
     
     if (newVehicle.position < m_length)
@@ -564,13 +555,9 @@ void Line::tick0()
     {
       // Move overflowing vehicles to next line
       newVehicle.position -= m_length;
-      // TODO choose out line to put the vehicle,
-      //      currently random.
+      // TODO choose out line to put the vehicle based on vehicle route.
       if (!m_out.empty())
       {
-        // TODO Vehicle delivery should choose recursively down the path,
-        //      for the situations where the vehicle is to "skip"
-        //      one or more following (too short) lines.
         m_out[rand() % m_out.size()]->deliverVehicle(this, newVehicle);
       }
     }
@@ -579,16 +566,12 @@ void Line::tick0()
 
 void Line::tick1()
 {
-  // Fetch all incoming vehicles from inbox
-  // FIXME Terminology: "Inbox" is used both for single inbox (it_inbox)
-  //       and map of all inboxes (m_vehicleInbox).
-  
-  // Pick incoming vehicles in sorted order
-  std::map<Line*, std::vector<VehicleInfo> >::iterator lineInFrontIt = m_vehicleInbox.begin();
-  while (lineInFrontIt != m_vehicleInbox.end())
+  // Fetch all incoming vehicles from inboxes, in sorted order
+  std::map<Line*, std::vector<VehicleInfo> >::iterator lineInFrontIt = m_vehicleInboxes.begin();
+  while (lineInFrontIt != m_vehicleInboxes.end())
   {
     for (std::map<Line*, std::vector<VehicleInfo> >::iterator lineIt
-        = m_vehicleInbox.begin(); lineIt != m_vehicleInbox.end(); lineIt++)
+        = m_vehicleInboxes.begin(); lineIt != m_vehicleInboxes.end(); lineIt++)
     {
       if (lineIt->second.empty())
       {
@@ -604,7 +587,7 @@ void Line::tick1()
       }
     }
     
-    if (lineInFrontIt != m_vehicleInbox.end() && !lineInFrontIt->second.empty())
+    if (lineInFrontIt != m_vehicleInboxes.end() && !lineInFrontIt->second.empty())
     {
       addVehicle(*lineInFrontIt->second.rbegin());
       lineInFrontIt->second.pop_back();

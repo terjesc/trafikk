@@ -54,7 +54,7 @@ class Line : public ControllerUser
     std::vector<Line *> m_cooperating;
     std::vector<Line *> m_interfering;
     int m_length;
-    std::map<Line*, std::vector<VehicleInfo> > m_vehicleInbox;
+    std::map<Line*, std::vector<VehicleInfo> > m_vehicleInboxes;
     Coordinates m_beginPoint, m_endPoint;
 
   public:
