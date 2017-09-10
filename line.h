@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <map>
+#include <queue>
 
 const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 100000;
 const int MMPS_PER_KMPH = 278; // km/h to mm/s conversion factor
@@ -31,12 +32,29 @@ struct Blocker
   int distance;
 };
 
-struct VehicleInfo
+class Line; // Forward declaration
+
+class VehicleInfo
 {
-  int speed;
-  int preferredSpeed;
-  int position;
-  float color[3];
+  public:
+    int speed;
+    int preferredSpeed;
+    int position;
+    float color[3];
+    std::deque<Line *> route;
+
+    void addRoutePoint(Line * line)
+    {
+      route.push_back(line);
+    }
+
+    void removeRoutePoint()
+    {
+      route.pop_front();
+    }
+
+    void fillRoute(Line * line);
+    Line * getNextRoutePoint(Line *line);
 };
 
 struct Coordinates
@@ -59,6 +77,9 @@ class Line : public ControllerUser
     Coordinates m_beginPoint, m_endPoint;
 
   public:
+#if 0
+    void makeRoutesForVehicles();
+#endif
     static int totalNumberOfVehicles;
 
     Line(Controller *controller, Coordinates* beginPoint = NULL, Coordinates* endPoint = NULL);
@@ -67,14 +88,17 @@ class Line : public ControllerUser
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
 
-    SpeedAction forwardGetSpeedAction(Blocker requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
-    SpeedAction backwardMergeGetSpeedAction(Blocker requestingVehicle, Line* requestingLine);
-    SpeedAction backwardYieldGetSpeedAction(Blocker requestingVehicle, Line* requestingLine);
+    SpeedAction forwardGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
+    SpeedAction backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
+    SpeedAction backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
 
     void addIn(Line * in);
     void addOut(Line * out);
     void addCooperating(Line * cooperating);
     void addInterfering(Line * interfering);
+
+    std::vector<Line *> getOut();
+
     int getLength();
     virtual void tick(int tickType);
     void tick0();
@@ -84,6 +108,4 @@ class Line : public ControllerUser
     std::vector<VehicleInfo> getVehicles();
     void moveRight(float distance = 0.2f);
 };
-
-
 
