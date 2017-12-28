@@ -34,6 +34,18 @@ struct Blocker
 
 class Line; // Forward declaration
 
+struct SpeedActionCulprit
+{
+  Line * line;
+  int distance;
+};
+
+struct SpeedActionInfo
+{
+  SpeedAction speedAction;
+  SpeedActionCulprit culprit;
+};
+
 class VehicleInfo
 {
   public:
@@ -42,6 +54,7 @@ class VehicleInfo
     int position;
     float color[3];
     std::deque<Line *> route;
+    SpeedActionInfo speedActionInfo;
 
     void addRoutePoint(Line * line)
     {
@@ -88,9 +101,9 @@ class Line : public ControllerUser
     void addVehicle(VehicleInfo vehicleInfo);
     void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
 
-    SpeedAction forwardGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
-    SpeedAction backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
-    SpeedAction backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
+    SpeedActionInfo forwardGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
+    SpeedActionInfo backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
+    SpeedActionInfo backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
 
     void addIn(Line * in);
     void addOut(Line * out);
@@ -107,5 +120,8 @@ class Line : public ControllerUser
     void draw();
     std::vector<VehicleInfo> getVehicles();
     void moveRight(float distance = 0.2f);
+
+    Coordinates coordinatesFromVehicleIndex(int index);
+    Coordinates coordinatesFromLineDistance(int distance);
 };
 

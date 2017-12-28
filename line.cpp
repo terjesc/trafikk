@@ -153,11 +153,11 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
  *
  * requestingVehicle.distance relative to this line
  */
-SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
-                                        Line        *requestingLine,
-                                        int          requestingVehicleIndex)
+SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
+                                            Line        *requestingLine,
+                                            int          requestingVehicleIndex)
 {
-  SpeedAction result = INCREASE;
+  SpeedActionInfo result = {INCREASE, {NULL, 0}};
 
   int brakeLength = pow(requestingVehicle->speed, 2) / (2 * BRAKE_ACCELERATION);
   int brakePoint = requestingVehicle->position + brakeLength;
@@ -185,13 +185,13 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
   if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
   {
     // Must brake in order not to risk colliding
-    return BRAKE;
+    return {BRAKE, {this, 1000}};
   }
   else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
       >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
   {
     // May not safely increase the speed
-    result = MAINTAIN;
+    return {MAINTAIN, {this, 1000}};
   }
 
   // Continue searches from end of line,
@@ -211,10 +211,13 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
         continue;
       }
 
-      SpeedAction yieldingResult =
+      SpeedActionInfo yieldingResult =
         (*interferingLineIt)->backwardYieldGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
 
-      result = std::min(yieldingResult, result);
+      if (yieldingResult.speedAction < result.speedAction)
+      {
+        result = yieldingResult;
+      }
     }
 
     // Perform backward search on cooperating lines,
@@ -229,10 +232,13 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
         continue;
       }
 
-      SpeedAction mergingResult =
+      SpeedActionInfo mergingResult =
           (*cooperatingLineIt)->backwardMergeGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
 
-      result = std::min(mergingResult, result);
+      if (mergingResult.speedAction < result.speedAction)
+      {
+        result = mergingResult;
+      }
     }
 
     // Perform forward search along the route
@@ -240,9 +246,13 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
     if (outboundLine != NULL
         && outboundLine != requestingLine)
     {
-      SpeedAction outboundResult =
+      SpeedActionInfo outboundResult =
           outboundLine->forwardGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
-      result = std::min(outboundResult, result);
+
+      if (outboundResult.speedAction < result.speedAction)
+      {
+        result = outboundResult;
+      }
     }
   }
 
@@ -255,19 +265,19 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
  * requestingVehicle.distance relative to the end of this line
  */
 
-SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
-                                              Line        *requestingLine)
+SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
+                                                  Line        *requestingLine)
 {
   // The search should have started with the requesting line,
   // so if we get back to the requesting line we can safely
   // return the "best case" action.
   if (requestingLine == this)
   {
-    return INCREASE;
+    return {INCREASE, {NULL, 0}};
   }
 
   // Default to increase speed.
-  SpeedAction result = INCREASE;
+  SpeedActionInfo result = {INCREASE, {NULL, 0}};
 
   // Adjust position so that the requesting line is relative to
   // the beginning of this line, not the end.
@@ -276,7 +286,7 @@ SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
   if (requestingVehicle->position > m_length)
   {
     // The corresponding position is after the end of this line.
-    return INCREASE;
+    return {INCREASE, {NULL, 0}};
   }
   else if (requestingVehicle->position < 0)
   {
@@ -285,11 +295,14 @@ SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
     for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
           inboundLineIt != m_in.cend(); ++inboundLineIt)
     {
-      SpeedAction nestedResult
+      SpeedActionInfo nestedResult
         = (*inboundLineIt)->backwardMergeGetSpeedAction(requestingVehicle,
                                                         requestingLine);
 
-      result = std::min(nestedResult, result);
+      if (nestedResult.speedAction < result.speedAction)
+      {
+        result = nestedResult;
+      }
     }
 
     //  Second, check with this blocker, as it might be relevant
@@ -305,13 +318,13 @@ SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return BRAKE;
+        return {BRAKE, {this, m_length - 1000}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = MAINTAIN;
+        result = {MAINTAIN, {this, m_length - 1000}};
       }
     }
   }
@@ -334,13 +347,13 @@ SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return BRAKE;
+          return {BRAKE, {this, m_length - 1000}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = MAINTAIN;
+          result = {MAINTAIN, {this, m_length - 1000}};
         }
 
         break; // We are finished, as we found and handled the closest vehicle.
@@ -351,8 +364,8 @@ SpeedAction Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle,
   return result;
 }
 
-SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
-                                              Line        *requestingLine)
+SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
+                                                  Line        *requestingLine)
 {
   bool yield = true;
 
@@ -361,11 +374,11 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
   // return the "best case" action.
   if (requestingLine == this)
   {
-    return INCREASE;
+    return {INCREASE, {NULL, 0}};
   }
 
   // Default to increase speed.
-  SpeedAction result = INCREASE;
+  SpeedActionInfo result = {INCREASE, {NULL, 0}};
 
   // Adjust position so that the requesting line is relative to
   // the beginning of this line, not the end.
@@ -389,7 +402,7 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
         if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH)
             >= requestingVehicle->position)
         {
-          return BRAKE;
+          return {BRAKE, {this, m_length - 1000}};
         }
       }
 
@@ -397,11 +410,14 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
       for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
             inboundLineIt != m_in.cend(); ++inboundLineIt)
       {
-        SpeedAction nestedResult
+        SpeedActionInfo nestedResult
           = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingVehicle,
                                                           requestingLine);
 
-        result = std::min(nestedResult, result);
+        if (nestedResult.speedAction < result.speedAction)
+        {
+          result = nestedResult;
+        }
       }
     }
   }
@@ -412,11 +428,14 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
     for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
           inboundLineIt != m_in.cend(); ++inboundLineIt)
     {
-      SpeedAction nestedResult
+      SpeedActionInfo nestedResult
         = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingVehicle,
                                                         requestingLine);
 
-      result = std::min(nestedResult, result);
+      if (nestedResult.speedAction < result.speedAction)
+      {
+        result = nestedResult;
+      }
     }
 
     //  Second, check with this blocker, as it might be relevant
@@ -432,13 +451,13 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return BRAKE;
+        return {BRAKE, {this, m_length - 1000}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = MAINTAIN;
+        result = {MAINTAIN, {this, m_length - 1000}};
       }
     }
   }
@@ -452,7 +471,7 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
       if (vehicleIt->position + (3 * SPEED)
               >= requestingVehicle->position)
       {
-        return BRAKE;
+        return {BRAKE, {this, m_length - 1000}};
       }
 
       if (vehicleIt->position > requestingVehicle->position)
@@ -467,13 +486,13 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return BRAKE;
+          return {BRAKE, {this, m_length - 1000}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = MAINTAIN;
+          result = {MAINTAIN, {this, m_length - 1000}};
         }
 
         // If yielding, see if the previous vehicle is also too close
@@ -486,11 +505,14 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
             for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
                   inboundLineIt != m_in.cend(); ++inboundLineIt)
             {
-              SpeedAction nestedResult
+              SpeedActionInfo nestedResult
                 = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingVehicle,
                                                                 requestingLine);
 
-              result = std::min(nestedResult, result);
+              if (nestedResult.speedAction < result.speedAction)
+              {
+                result = nestedResult;
+              }
             }
           }
           else
@@ -505,7 +527,7 @@ SpeedAction Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle,
                 >= requestingVehicle->position)
             {
               // The other vehicle may have to brake for us. We can not have that.
-              return BRAKE;
+              return {BRAKE, {this, m_length - 1000}};
             }
           }
         }
@@ -588,10 +610,12 @@ void Line::tick0()
       it != _vehicles.NOW().cend(); ++it)
   {
     int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
-   
+
     VehicleInfo newVehicle = *it;
 
-    switch (forwardGetSpeedAction(&newVehicle, this, vehicleIndex))
+    newVehicle.speedActionInfo = forwardGetSpeedAction(&newVehicle, this, vehicleIndex);
+
+    switch (newVehicle.speedActionInfo.speedAction)
     {
       case BRAKE:
         newVehicle.speed -= BRAKE_ACCELERATION;
@@ -759,8 +783,28 @@ void Line::draw()
     glVertex3f( HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
     glEnd();
     glPopMatrix();
+
+    switch (it->speedActionInfo.speedAction)
+    {
+      case BRAKE:
+        glColor3f(1.0f, 0.5f, 0.5f);
+        break;
+      case MAINTAIN:
+        glColor3f(1.0f, 1.0f, 0.5f);
+        break;
+      default:
+        break;
+    }
+
+    if (it->speedActionInfo.culprit.line != NULL)
+    {
+      Coordinates culprit = it->speedActionInfo.culprit.line->coordinatesFromLineDistance(it->speedActionInfo.culprit.distance);
+      glBegin(GL_LINES);
+      glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, SCALED_VEHICLE_HEIGHT);
+      glVertex3f(culprit.x, culprit.y, culprit.z);
+      glEnd();
+    }
   }
- //
 }
 
 std::vector<VehicleInfo> Line::getVehicles()
@@ -785,5 +829,20 @@ void Line::moveRight(float distance)
   m_beginPoint.y += (distance * normalVector.y);
   m_endPoint.x += (distance * normalVector.x);
   m_endPoint.y += (distance * normalVector.y);
+}
+
+
+Coordinates Line::coordinatesFromVehicleIndex(int index)
+{
+  return coordinatesFromLineDistance(_vehicles.NOW()[index].position);
+}
+
+Coordinates Line::coordinatesFromLineDistance(int distance)
+{
+  Coordinates coords;
+  coords.x = m_beginPoint.x + (distance * (m_endPoint.x - m_beginPoint.x) / m_length);
+  coords.y = m_beginPoint.y + (distance * (m_endPoint.y - m_beginPoint.y) / m_length);
+  coords.z = 0.0f;
+  return coords;
 }
 
