@@ -166,36 +166,37 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
                   + (2 * VEHICLE_LENGTH);
 
   // Check for vehicles to yield for in this line
-  int nextBrakePoint = INT_MAX;
-  int potentialCulpritDistance = 0;
+  int nextVehicleBrakePoint = INT_MAX;
+  int nextVehicleDistance = 0;
 
   if (requestingVehicleIndex == -1 // The requesting vehicle is external to this line,
       && !_vehicles.NOW().empty() // and there is a blocker in this line
       && _blocker.NOW().distance < searchPoint) // within search distance
   {
-    potentialCulpritDistance = _blocker.NOW().distance;
-    nextBrakePoint = _blocker.NOW().distance
-                   + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
+    nextVehicleDistance = _blocker.NOW().distance;
+    nextVehicleBrakePoint = _blocker.NOW().distance
+                          + (pow(_blocker.NOW().speed, 2)
+                          / (2 * BRAKE_ACCELERATION));
   }
   else if (requestingVehicleIndex > 0 // The requesting vehicle is in this line (but not first)
       && requestingVehicleIndex < static_cast<int>(_vehicles.NOW().size()))
   {
-    potentialCulpritDistance = _vehicles.NOW()[requestingVehicleIndex - 1].position;
-    nextBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position
-                   + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2)
-                     / (2 * BRAKE_ACCELERATION));
+    nextVehicleDistance = _vehicles.NOW()[requestingVehicleIndex - 1].position;
+    nextVehicleBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position
+                          + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2)
+                          / (2 * BRAKE_ACCELERATION));
   }
 
-  if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
+  if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextVehicleBrakePoint)
   {
     // Must brake in order not to risk colliding
-    return {BRAKE, {this, potentialCulpritDistance - (VEHICLE_LENGTH / 2)}};
+    return {BRAKE, {this, nextVehicleDistance - (VEHICLE_LENGTH / 2)}};
   }
   else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
-      >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+      >= std::max(0, nextVehicleBrakePoint - BRAKE_ACCELERATION))
   {
     // May not safely increase the speed
-    return {MAINTAIN, {this, potentialCulpritDistance - (VEHICLE_LENGTH / 2)}};
+    return {MAINTAIN, {this, nextVehicleDistance - (VEHICLE_LENGTH / 2)}};
   }
 
   // Continue searches from end of line,
