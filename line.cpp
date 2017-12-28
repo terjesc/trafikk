@@ -322,18 +322,18 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
       int nextBrakePoint = _blocker.NOW().distance
                          + (pow(_blocker.NOW().speed, 2)
                            / (2 * BRAKE_ACCELERATION));
-      int potentialCulpritDistance = _blocker.NOW().distance;
+      int nextVehicleDistance = _blocker.NOW().distance;
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+        return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+        result = {MAINTAIN, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
       }
     }
   }
@@ -352,18 +352,18 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
         int nextBrakePoint = vehicleIt->position
                            + (pow(vehicleIt->speed, 2)
                              / (2 * BRAKE_ACCELERATION));
-        int potentialCulpritDistance = vehicleIt->position;
+        int nextVehicleDistance = vehicleIt->position;
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+          return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+          result = {MAINTAIN, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
 
         break; // We are finished, as we found and handled the closest vehicle.
@@ -408,12 +408,12 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
         int behindBrakePoint = _vehicles.NOW()[0].position
                              + (pow(_vehicles.NOW()[0].speed, 2)
                                / (2 * BRAKE_ACCELERATION));
-        int potentialCulpritDistance = _vehicles.NOW()[0].position;
+        int nextVehicleDistance = _vehicles.NOW()[0].position;
 
         if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH)
             >= requestingVehicle->position)
         {
-          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+          return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
       }
 
@@ -458,18 +458,18 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
       int nextBrakePoint = _blocker.NOW().distance
                          + (pow(_blocker.NOW().speed, 2)
                            / (2 * BRAKE_ACCELERATION));
-      int potentialCulpritDistance = _blocker.NOW().distance;
+      int nextVehicleDistance = _blocker.NOW().distance;
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+        return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+        result = {MAINTAIN, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
       }
     }
   }
@@ -494,18 +494,18 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
         int nextBrakePoint = vehicleIt->position
                            + (pow(vehicleIt->speed, 2)
                              / (2 * BRAKE_ACCELERATION));
-        int potentialCulpritDistance = vehicleIt->position;
+        int nextVehicleDistance = vehicleIt->position;
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+          return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+          result = {MAINTAIN, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
 
         // If yielding, see if the previous vehicle is also too close
@@ -535,13 +535,13 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
             int behindBrakePoint = vehicleBehindIt->position
                                  + (pow(vehicleBehindIt->speed, 2)
                                    / (2 * BRAKE_ACCELERATION));
-            int potentialCulpritDistance = vehicleBehindIt->position;
+            int behindVehicleDistance = vehicleBehindIt->position;
 
             if ((behindBrakePoint + vehicleBehindIt->speed + VEHICLE_LENGTH)
                 >= requestingVehicle->position)
             {
               // The other vehicle may have to brake for us. We can not have that.
-              return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
+              return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2)}};
             }
           }
         }
