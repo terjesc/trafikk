@@ -237,7 +237,8 @@ SpeedAction Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
 
     // Perform forward search along the route
     Line * outboundLine = vehicleAtEndOfLine.getNextRoutePoint(this);
-    if (outboundLine != NULL)
+    if (outboundLine != NULL
+        && outboundLine != requestingLine)
     {
       SpeedAction outboundResult =
           outboundLine->forwardGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
