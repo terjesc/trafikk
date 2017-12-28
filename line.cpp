@@ -203,9 +203,6 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
   // but only if search does not distance out before that.
   if (searchPoint > m_length)
   {
-    VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
-    vehicleAtEndOfLine.position -= m_length;
-
     // Perform backward search on interfering lines,
     // for yielding for that traffic.
     for (std::vector<Line*>::const_iterator interferingLineIt = m_interfering.cbegin();
@@ -216,6 +213,8 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
         continue;
       }
 
+      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+      vehicleAtEndOfLine.position -= m_length;
       SpeedActionInfo yieldingResult =
         (*interferingLineIt)->backwardYieldGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
 
@@ -237,6 +236,8 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
         continue;
       }
 
+      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+      vehicleAtEndOfLine.position -= m_length;
       SpeedActionInfo mergingResult =
           (*cooperatingLineIt)->backwardMergeGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
 
@@ -247,10 +248,12 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
     }
 
     // Perform forward search along the route
-    Line * outboundLine = vehicleAtEndOfLine.getNextRoutePoint(this);
+    Line * outboundLine = requestingVehicle->getNextRoutePoint(this);
     if (outboundLine != NULL
         && outboundLine != requestingLine)
     {
+      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+      vehicleAtEndOfLine.position -= m_length;
       SpeedActionInfo outboundResult =
           outboundLine->forwardGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
 
