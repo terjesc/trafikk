@@ -167,16 +167,20 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
 
   // Check for vehicles to yield for in this line
   int nextBrakePoint = INT_MAX;
+  int potentialCulpritDistance = 0;
+
   if (requestingVehicleIndex == -1 // The requesting vehicle is external to this line,
       && !_vehicles.NOW().empty() // and there is a blocker in this line
       && _blocker.NOW().distance < searchPoint) // within search distance
   {
+    potentialCulpritDistance = _blocker.NOW().distance;
     nextBrakePoint = _blocker.NOW().distance
                    + (pow(_blocker.NOW().speed, 2) / (2 * BRAKE_ACCELERATION));
   }
   else if (requestingVehicleIndex > 0 // The requesting vehicle is in this line (but not first)
       && requestingVehicleIndex < static_cast<int>(_vehicles.NOW().size()))
   {
+    potentialCulpritDistance = _vehicles.NOW()[requestingVehicleIndex - 1].position;
     nextBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position
                    + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2)
                      / (2 * BRAKE_ACCELERATION));
@@ -185,13 +189,13 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
   if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
   {
     // Must brake in order not to risk colliding
-    return {BRAKE, {this, 1000}};
+    return {BRAKE, {this, potentialCulpritDistance - (VEHICLE_LENGTH / 2)}};
   }
   else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
       >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
   {
     // May not safely increase the speed
-    return {MAINTAIN, {this, 1000}};
+    return {MAINTAIN, {this, potentialCulpritDistance - (VEHICLE_LENGTH / 2)}};
   }
 
   // Continue searches from end of line,
@@ -314,17 +318,18 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
       int nextBrakePoint = _blocker.NOW().distance
                          + (pow(_blocker.NOW().speed, 2)
                            / (2 * BRAKE_ACCELERATION));
+      int potentialCulpritDistance = _blocker.NOW().distance;
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {BRAKE, {this, m_length - 1000}};
+        return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {MAINTAIN, {this, m_length - 1000}};
+        result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
       }
     }
   }
@@ -343,17 +348,18 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
         int nextBrakePoint = vehicleIt->position
                            + (pow(vehicleIt->speed, 2)
                              / (2 * BRAKE_ACCELERATION));
+        int potentialCulpritDistance = vehicleIt->position;
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {BRAKE, {this, m_length - 1000}};
+          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {MAINTAIN, {this, m_length - 1000}};
+          result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
         }
 
         break; // We are finished, as we found and handled the closest vehicle.
@@ -398,11 +404,12 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
         int behindBrakePoint = _vehicles.NOW()[0].position
                              + (pow(_vehicles.NOW()[0].speed, 2)
                                / (2 * BRAKE_ACCELERATION));
+        int potentialCulpritDistance = _vehicles.NOW()[0].position;
 
         if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH)
             >= requestingVehicle->position)
         {
-          return {BRAKE, {this, m_length - 1000}};
+          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
         }
       }
 
@@ -447,17 +454,18 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
       int nextBrakePoint = _blocker.NOW().distance
                          + (pow(_blocker.NOW().speed, 2)
                            / (2 * BRAKE_ACCELERATION));
+      int potentialCulpritDistance = _blocker.NOW().distance;
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {BRAKE, {this, m_length - 1000}};
+        return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
       }
       else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {MAINTAIN, {this, m_length - 1000}};
+        result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
       }
     }
   }
@@ -482,17 +490,18 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
         int nextBrakePoint = vehicleIt->position
                            + (pow(vehicleIt->speed, 2)
                              / (2 * BRAKE_ACCELERATION));
+        int potentialCulpritDistance = vehicleIt->position;
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {BRAKE, {this, m_length - 1000}};
+          return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
         }
         else if ((brakePoint + requestingVehicle->speed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {MAINTAIN, {this, m_length - 1000}};
+          result = {MAINTAIN, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
         }
 
         // If yielding, see if the previous vehicle is also too close
@@ -522,12 +531,13 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
             int behindBrakePoint = vehicleBehindIt->position
                                  + (pow(vehicleBehindIt->speed, 2)
                                    / (2 * BRAKE_ACCELERATION));
+            int potentialCulpritDistance = vehicleBehindIt->position;
 
             if ((behindBrakePoint + vehicleBehindIt->speed + VEHICLE_LENGTH)
                 >= requestingVehicle->position)
             {
               // The other vehicle may have to brake for us. We can not have that.
-              return {BRAKE, {this, m_length - 1000}};
+              return {BRAKE, {this, potentialCulpritDistance + (VEHICLE_LENGTH / 2)}};
             }
           }
         }
