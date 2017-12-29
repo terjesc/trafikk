@@ -148,6 +148,22 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
   }
 }
 
+static int calculateBrakePoint(int currentPosition, int speed)
+{
+  int brakeLength = pow(speed, 2) / (2 * BRAKE_ACCELERATION);
+  return currentPosition + brakeLength;
+}
+
+static int calculateBrakePoint(VehicleInfo const *vehicleInfo)
+{
+  return calculateBrakePoint(vehicleInfo->position, vehicleInfo->speed);
+}
+
+static int calculateBrakePoint(Blocker const *blocker)
+{
+  return calculateBrakePoint(blocker->distance, blocker->speed);
+}
+
 /*
  * Forward search for whether a vehicle may accelerate or must brake
  *
@@ -159,8 +175,7 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
 {
   SpeedActionInfo result = {INCREASE, {NULL, 0}};
 
-  int brakeLength = pow(requestingVehicle->speed, 2) / (2 * BRAKE_ACCELERATION);
-  int brakePoint = requestingVehicle->position + brakeLength;
+  int brakePoint = calculateBrakePoint(requestingVehicle);
   int searchPoint = brakePoint
                   + (2 * requestingVehicle->speed)
                   + (2 * VEHICLE_LENGTH);
@@ -174,17 +189,13 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
       && _blocker.NOW().distance < searchPoint) // within search distance
   {
     nextVehicleDistance = _blocker.NOW().distance;
-    nextVehicleBrakePoint = _blocker.NOW().distance
-                          + (pow(_blocker.NOW().speed, 2)
-                          / (2 * BRAKE_ACCELERATION));
+    nextVehicleBrakePoint = calculateBrakePoint(&_blocker.NOW());
   }
   else if (requestingVehicleIndex > 0 // The requesting vehicle is in this line (but not first)
       && requestingVehicleIndex < static_cast<int>(_vehicles.NOW().size()))
   {
     nextVehicleDistance = _vehicles.NOW()[requestingVehicleIndex - 1].position;
-    nextVehicleBrakePoint = _vehicles.NOW()[requestingVehicleIndex - 1].position
-                          + (pow(_vehicles.NOW()[requestingVehicleIndex - 1].speed, 2)
-                          / (2 * BRAKE_ACCELERATION));
+    nextVehicleBrakePoint = calculateBrakePoint(&_vehicles.NOW()[requestingVehicleIndex - 1]);
   }
 
   if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextVehicleBrakePoint)
@@ -316,13 +327,9 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
     //  Second, check with this blocker, as it might be relevant
     if (!_vehicles.NOW().empty())
     {
-      int brakeLength = pow(requestingVehicle->speed, 2)
-                        / (2 * BRAKE_ACCELERATION);
-      int brakePoint = requestingVehicle->position + brakeLength;
-      int nextBrakePoint = _blocker.NOW().distance
-                         + (pow(_blocker.NOW().speed, 2)
-                           / (2 * BRAKE_ACCELERATION));
+      int brakePoint = calculateBrakePoint(requestingVehicle);
       int nextVehicleDistance = _blocker.NOW().distance;
+      int nextBrakePoint = calculateBrakePoint(&_blocker.NOW());
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
@@ -346,13 +353,9 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
     {
       if (vehicleIt->position > requestingVehicle->position)
       {
-        int brakeLength = pow(requestingVehicle->speed, 2)
-                          / (2 * BRAKE_ACCELERATION);
-        int brakePoint = requestingVehicle->position + brakeLength;
-        int nextBrakePoint = vehicleIt->position
-                           + (pow(vehicleIt->speed, 2)
-                             / (2 * BRAKE_ACCELERATION));
+        int brakePoint = calculateBrakePoint(requestingVehicle);
         int nextVehicleDistance = vehicleIt->position;
+        int nextBrakePoint = calculateBrakePoint(&*vehicleIt);
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
@@ -405,15 +408,13 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
       // than requstingVehicle.distance, then return BRAKE
       if (!_vehicles.NOW().empty())
       {
-        int behindBrakePoint = _vehicles.NOW()[0].position
-                             + (pow(_vehicles.NOW()[0].speed, 2)
-                               / (2 * BRAKE_ACCELERATION));
-        int nextVehicleDistance = _vehicles.NOW()[0].position;
+        int behindVehicleDistance = _vehicles.NOW()[0].position;
+        int behindBrakePoint = calculateBrakePoint(&_vehicles.NOW()[0]);
 
         if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH)
             >= requestingVehicle->position)
         {
-          return {BRAKE, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2)}};
+          return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2)}};
         }
       }
 
@@ -452,13 +453,9 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
     //  Second, check with this blocker, as it might be relevant
     if (!_vehicles.NOW().empty())
     {
-      int brakeLength = pow(requestingVehicle->speed, 2)
-                        / (2 * BRAKE_ACCELERATION);
-      int brakePoint = requestingVehicle->position + brakeLength;
-      int nextBrakePoint = _blocker.NOW().distance
-                         + (pow(_blocker.NOW().speed, 2)
-                           / (2 * BRAKE_ACCELERATION));
+      int brakePoint = calculateBrakePoint(requestingVehicle);
       int nextVehicleDistance = _blocker.NOW().distance;
+      int nextBrakePoint = calculateBrakePoint(&_blocker.NOW());
 
       if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
       {
@@ -488,13 +485,9 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
 
       if (vehicleIt->position > requestingVehicle->position)
       {
-        int brakeLength = pow(requestingVehicle->speed, 2)
-                          / (2 * BRAKE_ACCELERATION);
-        int brakePoint = requestingVehicle->position + brakeLength;
-        int nextBrakePoint = vehicleIt->position
-                           + (pow(vehicleIt->speed, 2)
-                             / (2 * BRAKE_ACCELERATION));
+        int brakePoint = calculateBrakePoint(requestingVehicle);
         int nextVehicleDistance = vehicleIt->position;
+        int nextBrakePoint = calculateBrakePoint(&*vehicleIt);
 
         if ((brakePoint + requestingVehicle->speed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
@@ -532,10 +525,9 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
           {
             // The vehicle "behind" is in this line.
             std::vector<VehicleInfo>::const_reverse_iterator vehicleBehindIt = vehicleIt - 1;
-            int behindBrakePoint = vehicleBehindIt->position
-                                 + (pow(vehicleBehindIt->speed, 2)
-                                   / (2 * BRAKE_ACCELERATION));
+
             int behindVehicleDistance = vehicleBehindIt->position;
+            int behindBrakePoint = calculateBrakePoint(&*vehicleBehindIt);
 
             if ((behindBrakePoint + vehicleBehindIt->speed + VEHICLE_LENGTH)
                 >= requestingVehicle->position)
