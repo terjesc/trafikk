@@ -103,18 +103,20 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
   }
   numberOfVehicles = rand() % (1 + (2 * numberOfVehicles));
 
-  totalNumberOfVehicles += numberOfVehicles;
   std::vector<VehicleInfo> v;
   for (int i = 0; i < numberOfVehicles; ++i)
   {
-    int vehiclePreferedSpeed = SPEED - 1000 + (rand() % 2001);
-    int vehiclePosition = m_length - (i * m_length / numberOfVehicles);
-    VehicleInfo vi = {SPEED, vehiclePreferedSpeed, vehiclePosition, {0}, std::deque<Line*>()};
+    int id = totalNumberOfVehicles + i + 1;
+    int preferedSpeed = SPEED - 1000 + (rand() % 2001);
+    int position = m_length - (i * m_length / numberOfVehicles);
+    SpeedActionInfo speedActionInfo = {INCREASE, {NULL, 0}, 0};
+    VehicleInfo vi = {id, SPEED, preferedSpeed, position, {0}, std::deque<Line*>(), speedActionInfo};
     vi.color[0] = 0.4f + ((rand() % 50) / 100.0f);
     vi.color[1] = 0.4f + ((rand() % 50) / 100.0f);
     vi.color[2] = 0.4f + ((rand() % 50) / 100.0f);
     v.push_back(vi);
   }
+  totalNumberOfVehicles += numberOfVehicles;
   _vehicles.initialize(v);
 }
 
@@ -621,7 +623,72 @@ void Line::tick0()
 
     newVehicle.speedActionInfo = forwardGetSpeedAction(&newVehicle, this, vehicleIndex);
 
-    switch (newVehicle.speedActionInfo.speedAction)
+    SpeedAction previousAction = it->speedActionInfo.speedAction;
+    SpeedAction thisAction = newVehicle.speedActionInfo.speedAction;
+
+    // Vehicle has been stopped for some time. Are we gridlocked?
+    if (newVehicle.speed == 0
+        && thisAction == BRAKE
+        && newVehicle.speedActionInfo.culprit.line != this
+        && newVehicle.speedActionInfo.timeSinceLastActionChange >= 5)
+    {
+      // TODO We must know which vehicle is the culprit, in order to iterate
+      //      through the chain of blocking vehicles. Now we only have the
+      //      distance relative to the line it is currently inhabiting.
+
+      // We have already checked that we are at a complete stand-still,
+      // that we are indeed at an intersection (waiting for a separate line),
+      // and that some time has passed.
+      //
+      // We may consider chekcing if the culprit is in our direct forward path,
+      // but that is not completely thought through yet and may be a mistake.
+      // It may simply be too restrictive.
+      //
+      // We may want to limit our search depth as well, but for now waiting
+      // for a hard coded magic number of ticks before starting the search
+      // will probably suffice.
+
+      // TODO Detect loop, by following path of culprits until:
+      //
+      //      A) A vehicle is reached which is not waiting for another vehicle.
+      //      B) A loop is detected, but this vehicle is not in the loop.
+      //      C) We get back to this vehicle.
+      //
+      //      In case of A or B, not a loop, wait before trying again.
+      //      * Possibly by resetting timeSinceLastActionChange?
+      //      * Renaming that variable to better reflect its use?
+      //      * Store it not as part of the speedActionInfo, but rather
+      //        in the vehicleInfo structure itself, as that seems a more
+      //        reasonable place to have it?
+      //
+      //      In case of C, further checking is necessary:
+      //      D) The one waiting for this vehicle, has been waiting the longest
+      //         in the entire loop. (Tie-breaker: Vehicle ID)
+      //
+      //      In case of D, add D to "vehiclesToYieldFor".
+      //
+      //      TODO Use "vehiclesToYieldFor" in the backwards searches:
+      //           Return INCREASE when the requestingVehicle is in the
+      //           vehiclesToYieldFor list of the vehicle it should otherwise
+      //           BRAKE or MAINTAIN for.
+    }
+
+    // Delete all extraordinary yielding when the vehicle can move again,
+    // as that means the gridlock has now been solved.
+    if (thisAction != previousAction
+        && thisAction == INCREASE
+        && newVehicle.vehiclesToYieldFor.size())
+    {
+      newVehicle.vehiclesToYieldFor.clear();
+    }
+
+    // Count the time passed in the same action.
+    if (previousAction == thisAction)
+    {
+      newVehicle.speedActionInfo.timeSinceLastActionChange = it->speedActionInfo.timeSinceLastActionChange + 1;
+    }
+
+    switch (thisAction)
     {
       case BRAKE:
         newVehicle.speed -= BRAKE_ACCELERATION;

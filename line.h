@@ -44,17 +44,20 @@ struct SpeedActionInfo
 {
   SpeedAction speedAction;
   SpeedActionCulprit culprit;
+  int timeSinceLastActionChange;
 };
 
 class VehicleInfo
 {
   public:
+    int id;
     int speed;
     int preferredSpeed;
     int position;
     float color[3];
     std::deque<Line *> route;
     SpeedActionInfo speedActionInfo;
+    std::vector<int> vehiclesToYieldFor;
 
     void addRoutePoint(Line * line)
     {
