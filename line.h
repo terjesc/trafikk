@@ -7,7 +7,7 @@
 #include <map>
 #include <queue>
 
-const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 100000;
+const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 100000 / 2;
 const int MMPS_PER_KMPH = 278; // km/h to mm/s conversion factor
 const int SPEED = 30 * MMPS_PER_KMPH;
 const int VEHICLE_LENGTH = 4000;
@@ -30,20 +30,22 @@ struct Blocker
 {
   int speed;
   int distance;
+  int index;
 };
 
 class Line; // Forward declaration
 
 struct SpeedActionCulprit
 {
-  Line * line;
-  int distance;
+  Line * line; // The line on which the culprit was seen.
+  int distance; // The spatial position of the culprit  on the line.
+  int index; // The ordered position of the culprit on the line.
 };
 
 struct SpeedActionInfo
 {
-  SpeedAction speedAction;
-  SpeedActionCulprit culprit;
+  SpeedAction speedAction; // What speed action to perform.
+  SpeedActionCulprit culprit; // What to blame for the speed action.
   int timeSinceLastActionChange;
 };
 
