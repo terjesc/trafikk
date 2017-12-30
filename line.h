@@ -59,7 +59,7 @@ class VehicleInfo
     float color[3];
     std::deque<Line *> route;
     SpeedActionInfo speedActionInfo;
-    std::vector<int> vehiclesToYieldFor;
+    std::set<int> vehiclesToYieldFor;
 
     void addRoutePoint(Line * line)
     {
@@ -124,6 +124,7 @@ class Line : public ControllerUser
     void print();
     void draw();
     std::vector<VehicleInfo> getVehicles();
+    VehicleInfo const * getVehicle(int index) const;
     void moveRight(float distance = 0.2f);
 
     Coordinates coordinatesFromVehicleIndex(int index);

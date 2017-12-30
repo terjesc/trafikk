@@ -648,14 +648,10 @@ void Line::tick0()
 
     // Vehicle has been stopped for some time. Are we gridlocked?
     if (newVehicle.speed == 0
-        && thisAction == BRAKE
+        && (thisAction == BRAKE || thisAction == MAINTAIN)
         && newVehicle.speedActionInfo.culprit.line != this
         && newVehicle.speedActionInfo.timeSinceLastActionChange >= 5)
     {
-      // TODO We must know which vehicle is the culprit, in order to iterate
-      //      through the chain of blocking vehicles. Now we only have the
-      //      distance relative to the line it is currently inhabiting.
-
       // We have already checked that we are at a complete stand-still,
       // that we are indeed at an intersection (waiting for a separate line),
       // and that some time has passed.
@@ -686,11 +682,69 @@ void Line::tick0()
       //         in the entire loop. (Tie-breaker: Vehicle ID)
       //
       //      In case of D, add D to "vehiclesToYieldFor".
-      //
-      //      TODO Use "vehiclesToYieldFor" in the backwards searches:
-      //           Return INCREASE when the requestingVehicle is in the
-      //           vehiclesToYieldFor list of the vehicle it should otherwise
-      //           BRAKE or MAINTAIN for.
+
+      SpeedActionInfo comingFromSpeedActionInfo = newVehicle.speedActionInfo;
+      SpeedActionInfo goingToSpeedActionInfo;
+      int thisVehicleId = newVehicle.id;
+      int comingFromId = thisVehicleId;
+      int longestWaitCandidateId = thisVehicleId;
+      int longestWaitCandidateTime = newVehicle.speedActionInfo.timeSinceLastActionChange;
+      std::set<int> visitedVehicleIds;
+
+      for (int timeout = newVehicle.speedActionInfo.timeSinceLastActionChange;
+          timeout > 0; --timeout)
+      {
+        VehicleInfo goingToVehicleInfo = *comingFromSpeedActionInfo.culprit.line->getVehicle(comingFromSpeedActionInfo.culprit.index);
+        goingToSpeedActionInfo = goingToVehicleInfo.speedActionInfo;
+
+        // Break if not waiting
+        if (goingToSpeedActionInfo.speedAction == INCREASE)
+        {
+          break;
+        }
+
+        // Check if looping (but not back to here), if so break
+        int goingToId = goingToVehicleInfo.id;
+        if (visitedVehicleIds.count(goingToId))
+        {
+          break;
+        }
+
+        // Keep track of the longest waiting vehicle.
+        // Use ID for tie breaker.
+        int goingToTime = goingToSpeedActionInfo.timeSinceLastActionChange;
+        if ((goingToTime > longestWaitCandidateTime)
+            || (goingToTime == longestWaitCandidateTime
+              && goingToId < longestWaitCandidateId))
+        {
+          longestWaitCandidateTime = goingToTime;
+          longestWaitCandidateId = goingToId;
+        }
+
+        // If not back here at this point, continue
+        if (goingToId != thisVehicleId)
+        {
+          comingFromId = goingToId;
+          comingFromSpeedActionInfo = goingToSpeedActionInfo;
+          continue;
+        }
+
+        else if (comingFromId == longestWaitCandidateId)
+        {
+          newVehicle.vehiclesToYieldFor.insert(comingFromId);
+          break;
+        }
+
+        // If we fall through all the way it means we did return to the
+        // original vehicle, but not from the longest waiter. In any case
+        // we are finished.
+        break;
+      }
+
+      // TODO Use "vehiclesToYieldFor" in the backwards searches: Return
+      // INCREASE when the requestingVehicle is in the vehiclesToYieldFor list
+      // of the vehicle it should otherwise BRAKE or MAINTAIN for. (Not to be
+      // implemented here; implement in the appropriate searches.)
     }
 
     // Delete all extraordinary yielding when the vehicle can move again,
@@ -903,6 +957,16 @@ void Line::draw()
 std::vector<VehicleInfo> Line::getVehicles()
 {
   return _vehicles.NOW();
+}
+
+VehicleInfo const * Line::getVehicle(int index) const
+{
+  if (index >= 0 && static_cast<unsigned int>(index) < _vehicles.NOW().size())
+  {
+    return &_vehicles.NOW()[index];
+  }
+
+  return NULL;
 }
 
 void Line::moveRight(float distance)
