@@ -278,6 +278,9 @@ std::vector<Line*> loadTestLines(Controller &controller, std::string fileName)
     lineStream >> end.y;
     lineStream >> end.z;
 
+    begin.z -= 30.0f;
+    end.z -= 30.0f;
+
     Line *newLine = new Line(&controller, begin, end);
     lineMap.insert(std::pair<int,Line*>(lineNumber, newLine));
 
@@ -382,7 +385,17 @@ int main()
   // Initialize ImGui
   ImGui::SFML::Init(window);
 
-#define LIMIT_FRAMERATE 10
+  /*
+   * If using exponential speed settings from 1 to 60,
+   * these are some options:
+   *
+   *  1 ->  8 -> 60
+   *  1 ->  4 -> 15 -> 60
+   *  1 ->  3 ->  8 -> 22 -> 60
+   *  1 ->  2 ->  5 -> 12 -> 26 -> 60
+   */
+
+#define LIMIT_FRAMERATE 15
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
   {
@@ -431,12 +444,17 @@ int main()
   controller.registerTickType(0);
   controller.registerTickType(1);
 
+
+  // Make a transport network
+  TransportNetwork transportNetwork(&controller);
+  transportNetwork.loadLinesFromFile("../testbane.txt");
+
   // Make some lines
 //  const bool ONE_WAY_LINES = true;
 //  std::vector<Line*> lines = createRandomLines(controller, ONE_WAY_LINES);
 
   std::vector<Line*> lines;
-
+#if 0
   for (float yPos = 4.0f; yPos < 9.0f; yPos += 4.0f)
   {
     bool yieldEnable = true;
@@ -448,7 +466,8 @@ int main()
       lines.push_back(*it);
     }
   }
-
+#endif
+#if 0
   // Load lines from file
   std::vector<Line*> testLines = loadTestLines(controller, "../testbane.txt");
   for (std::vector<Line*>::const_iterator it = testLines.cbegin();
@@ -456,7 +475,7 @@ int main()
   {
     lines.push_back(*it);
   }
-
+#endif
   std::cout << "Total number of vehicles: "
     << Line::totalNumberOfVehicles << std::endl;
 
@@ -493,7 +512,7 @@ int main()
     
     // Camera position
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -25.0f); // Go back (zoom out, fixed)
+    glTranslatef(0.0f, 0.0f, -35.0f); // Go back (zoom out, fixed)
     glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Tilt (fixed)
     glRotatef(-10.0f, 0.0f, 0.0f, 1.0f); // Rotate (fixed)
 
@@ -516,6 +535,9 @@ int main()
       lines[i]->draw();
     }
 
+    // Draw the transportNetwork
+    transportNetwork.draw();
+
     // Prepare for drawing through SFML
     unbindModernGL();
     window.pushGLStates();
@@ -534,6 +556,7 @@ int main()
     ImGui::Text(vehicle_str);
     ImGui::End();
 
+//    std::cout << "\t-\tTICK\t-\t" << std::endl;
     controller.tick();
 
     ImGui::SFML::Render(window);

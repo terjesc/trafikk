@@ -6,6 +6,244 @@
 #include <cmath>
 #include <iostream>
 #include <GL/glew.h>
+#include <map>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <unordered_map>
+
+static const Vehicle DEFAULT_VEHICLE = {{0.5, 0.5, 0.5}};
+
+void TransportNetworkPacketMutableData::fillRoute(Line * line)
+{
+  if (route.size())
+  {
+    for (std::deque<Line *>::const_iterator it = route.cbegin();
+        it != route.cend() && *it != line; ++it)
+    {
+      removeRoutePoint();
+    }
+  }
+
+  if (route.empty())
+  {
+    addRoutePoint(line);
+  }
+
+  while (route.size() < 10)
+  {
+    if (route.back()->getOut().size() == 0)
+    {
+      break;
+    }
+    Line * routeExtension = route.back()->getOut()[rand() % route.back()->getOut().size()];
+    addRoutePoint(routeExtension);
+  }
+}
+
+Line * TransportNetworkPacketMutableData::getNextRoutePoint(Line * line) const
+{
+  if (line == NULL)
+  {
+    return NULL;
+  }
+
+  if (route.empty())
+  {
+    return NULL;
+  }
+
+  for (std::deque<Line *>::const_iterator it = route.cbegin();
+      it != route.cend(); ++it)
+  {
+    if (it != route.cend() && *it == line)
+    {
+      it++;
+      if (it != route.cend())
+      {
+        return *it;
+      }
+      else
+      {
+        return NULL;
+      }
+    }
+  }
+
+  return NULL;
+}
+
+TransportNetworkPacket::TransportNetworkPacket(Controller * controller)
+  : mutableData(controller)
+{
+}
+
+unsigned int TransportNetwork::nextPacketIndex()
+{
+  static unsigned int nextPacketIndex = 0;
+  while (m_packets.find(nextPacketIndex) != m_packets.end())
+  {
+    nextPacketIndex++;
+  }
+  return nextPacketIndex;
+}
+
+TransportNetwork::TransportNetwork(Controller *controller)
+{
+  p_controller = controller;
+}
+
+unsigned int TransportNetwork::addPacket(TransportNetworkPacket packet, Line * line)
+{
+  unsigned int packetIndex = nextPacketIndex();
+  m_packets.insert({packetIndex, packet});
+  line->deliverPacket(line, packetIndex);
+  return packetIndex;
+}
+
+TransportNetworkPacket * TransportNetwork::getPacket(unsigned int packetIndex)
+{
+  std::unordered_map<unsigned int, TransportNetworkPacket>::iterator packetIt
+      = m_packets.find(packetIndex);
+  if (packetIt == m_packets.end())
+  {
+    return NULL;
+  }
+  else
+  {
+    return &packetIt->second;
+  }
+}
+
+bool TransportNetwork::loadLinesFromFile(std::string fileName)
+{
+  std::map<int, Line*> lineMap;
+  std::vector<std::pair<int, int> > inLines;
+  std::vector<std::pair<int, int> > outLines;
+  std::vector<std::pair<int, int> > mergeLines;
+  std::vector<std::pair<int, int> > yieldLines;
+
+  std::string line;
+  std::ifstream lineFile(fileName.c_str());
+  // TODO Error handling: Return false if opening file fails.
+
+  while (std::getline(lineFile, line))
+  {
+    if (line.length() == 0 || line[0] == '#')
+    {
+      continue;
+    }
+
+    std::stringstream lineStream;
+    lineStream << line;
+
+    int lineNumber;
+    lineStream >> lineNumber;
+
+    Coordinates begin, end;
+
+    lineStream >> begin.x;
+    lineStream >> begin.y;
+    lineStream >> begin.z;
+    lineStream >> end.x;
+    lineStream >> end.y;
+    lineStream >> end.z;
+
+    Line *newLine = new Line(p_controller, begin, end, this);
+    lineMap.insert(std::pair<int,Line*>(lineNumber, newLine));
+
+    int inCount;
+    lineStream >> inCount;
+    for (int i = 0; i < inCount; ++i)
+    {
+      int inLine;
+      lineStream >> inLine;
+      inLines.push_back(std::pair<int, int>(lineNumber, inLine));
+    }
+
+    int outCount;
+    lineStream >> outCount;
+    for (int i = 0; i < outCount; ++i)
+    {
+      int outLine;
+      lineStream >> outLine;
+      outLines.push_back(std::pair<int, int>(lineNumber, outLine));
+    }
+
+    int mergeCount;
+    lineStream >> mergeCount;
+    for (int i = 0; i < mergeCount; ++i)
+    {
+      int mergeLine;
+      lineStream >> mergeLine;
+      mergeLines.push_back(std::pair<int, int>(lineNumber, mergeLine));
+    }
+
+    int yieldCount;
+    lineStream >> yieldCount;
+    for (int i = 0; i < yieldCount; ++i)
+    {
+      int yieldLine;
+      lineStream >> yieldLine;
+      yieldLines.push_back(std::pair<int, int>(lineNumber, yieldLine));
+    }
+  }
+  lineFile.close();
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = inLines.cbegin();
+      it != inLines.cend(); ++it)
+  {
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addIn(lineMap[it->second]);
+    }
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = outLines.cbegin();
+      it != outLines.cend(); ++it)
+  {
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addOut(lineMap[it->second]);
+    }
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = mergeLines.cbegin();
+      it != mergeLines.cend(); ++it)
+  {
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addCooperating(lineMap[it->second]);
+    }
+  }
+
+  for (std::vector<std::pair<int, int> >::const_iterator it = yieldLines.cbegin();
+      it != yieldLines.cend(); ++it)
+  {
+    if (lineMap.count(it->first) && lineMap.count(it->second))
+    {
+      (lineMap[it->first])->addInterfering(lineMap[it->second]);
+    }
+  }
+
+  for (std::map<int, Line*>::const_iterator lineIt = lineMap.cbegin();
+      lineIt != lineMap.cend(); ++lineIt)
+  {
+    m_lines.push_back(lineIt->second);
+  }
+
+  return true;
+}
+
+void TransportNetwork::draw()
+{
+  for (std::vector<Line *>::iterator lineIt = m_lines.begin();
+      lineIt != m_lines.end(); ++lineIt)
+  {
+    (*lineIt)->draw();
+  }
+}
 
 void VehicleInfo::fillRoute(Line * line)
 {
@@ -62,12 +300,15 @@ Line * VehicleInfo::getNextRoutePoint(Line * line)
   return NULL;
 }
 
-Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoint)
+Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoint, TransportNetwork * transportNetwork)
   : ControllerUser(controller),
     _blocker(controller, {0, 0}),
     _vehicles(controller),
+    _packets(controller),
     tickNumber(controller, 0)
 {
+  p_transportNetwork = transportNetwork;
+
   // Assign or randomize the physical starting point of the line
   if (beginPoint != NULL)
   {
@@ -103,25 +344,57 @@ Line::Line(Controller *controller, Coordinates* beginPoint, Coordinates* endPoin
   }
   numberOfVehicles = rand() % (1 + (2 * numberOfVehicles));
 
-  std::vector<VehicleInfo> v;
-  for (int i = 0; i < numberOfVehicles; ++i)
+  // After the change to TransportNetworkPackets, use that instead...
+  if (p_transportNetwork != NULL)
   {
-    int id = totalNumberOfVehicles + i + 1;
-    int preferedSpeed = SPEED - 1000 + (rand() % 2001);
-    int position = m_length - (i * m_length / numberOfVehicles);
-    SpeedActionInfo speedActionInfo = {INCREASE, {NULL, 0}, 0};
-    VehicleInfo vi = {id, SPEED, preferedSpeed, position, {0}, std::deque<Line*>(), speedActionInfo};
-    vi.color[0] = 0.4f + ((rand() % 50) / 100.0f);
-    vi.color[1] = 0.4f + ((rand() % 50) / 100.0f);
-    vi.color[2] = 0.4f + ((rand() % 50) / 100.0f);
-    v.push_back(vi);
+    // Add TransportNetworkPackets instead of vehicles
+    for (int i = 0; i < numberOfVehicles; ++i)
+    {
+      TransportNetworkPacket packet(controller);
+
+      Vehicle * vehicle = new Vehicle;
+      vehicle->color[0] = 0.4f + ((rand() % 50) / 100.0f);
+      vehicle->color[1] = 0.4f + ((rand() % 50) / 100.0f);
+      vehicle->color[2] = 0.4f + ((rand() % 50) / 100.0f);
+      packet.vehicle = vehicle;
+
+      packet.length = VEHICLE_LENGTH;
+      packet.preferredSpeed = SPEED - 1000 + (rand() % 2001);
+
+      TransportNetworkPacketMutableData mutableData;
+      mutableData.speed = SPEED;
+      mutableData.positionAtLine = m_length - (i * m_length / numberOfVehicles) - 1;
+      mutableData.speedAction = INCREASE;
+      mutableData.waitingFor = -1;
+      mutableData.waitedTime = 0;
+      mutableData.physicallyBlocked = false;
+      packet.mutableData.initialize(mutableData);
+
+      p_transportNetwork->addPacket(packet, this);
+    }
+  }
+  else // Legacy code: Adds VehicleInfo. TODO remove
+  {
+    std::vector<VehicleInfo> v;
+    for (int i = 0; i < numberOfVehicles; ++i)
+    {
+      int id = totalNumberOfVehicles + i + 1;
+      int preferedSpeed = SPEED - 1000 + (rand() % 2001);
+      int position = m_length - (i * m_length / numberOfVehicles);
+      SpeedActionInfo speedActionInfo = {INCREASE, {NULL, 0, -1}, 0};
+      VehicleInfo vi = {id, SPEED, preferedSpeed, position, {0}, std::deque<Line*>(), speedActionInfo};
+      vi.color[0] = 0.4f + ((rand() % 50) / 100.0f);
+      vi.color[1] = 0.4f + ((rand() % 50) / 100.0f);
+      vi.color[2] = 0.4f + ((rand() % 50) / 100.0f);
+      v.push_back(vi);
+    }
+    _vehicles.initialize(v);
   }
   totalNumberOfVehicles += numberOfVehicles;
-  _vehicles.initialize(v);
 }
 
-Line::Line(Controller *controller, Coordinates beginPoint, Coordinates endPoint)
-  : Line(controller, &beginPoint, &endPoint)
+Line::Line(Controller *controller, Coordinates beginPoint, Coordinates endPoint, TransportNetwork * transportNetwork)
+  : Line(controller, &beginPoint, &endPoint, transportNetwork)
 {
 }
 
@@ -130,6 +403,11 @@ int Line::totalNumberOfVehicles = 0;
 void Line::addVehicle(VehicleInfo vehicleInfo)
 {
   _vehicles.THEN().push_back(vehicleInfo);
+}
+
+void Line::addPacket(unsigned int packetId)
+{
+  _packets.THEN().push_back(packetId);
 }
 
 void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
@@ -150,6 +428,42 @@ void Line::deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo)
   }
 }
 
+bool Line::deliverPacket(Line * senderLine, unsigned int packetId)
+{
+  if (p_transportNetwork == NULL)
+  {
+    return false;
+  }
+
+  TransportNetworkPacket * packet = p_transportNetwork->getPacket(packetId);
+  
+  if (packet == NULL)
+  {
+    return false;
+  }
+
+  packet->mutableData.THEN().fillRoute(this);
+  int positionAtLine = packet->mutableData.THEN().positionAtLine;
+
+  if (positionAtLine >= 0 && positionAtLine < m_length)
+  {
+    m_packetInboxes[senderLine].push_back(packetId);
+    return true;
+  }
+  else
+  {
+    packet->mutableData.THEN().positionAtLine -= m_length;
+    if (!m_out.empty())
+      // FIXME should probably check that route.front() exists
+    {
+      packet->mutableData.THEN().route.front()->deliverPacket(senderLine, packetId);
+    }
+
+  }
+
+  return false;
+}
+
 static int calculateBrakePoint(int currentPosition, int speed)
 {
   int brakeLength = pow(speed, 2) / (2 * BRAKE_ACCELERATION);
@@ -164,6 +478,164 @@ static int calculateBrakePoint(VehicleInfo const *vehicleInfo)
 static int calculateBrakePoint(Blocker const *blocker)
 {
   return calculateBrakePoint(blocker->distance, blocker->speed);
+}
+
+/*
+ * Forward search for whether a vehicle may accelerate or must brake
+ *
+ * requestingVehicle.distance relative to this line
+ */
+SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPacket,
+                                            int                     requestingPacketIndex,
+                                            Line                   *requestingLine,
+                                            int                     requestingPacketPosition)
+{
+  SpeedActionInfo result = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+
+//  int requestingPacketPosition = requestingLinePosition + requestingPacket->mutableData.NOW().positionAtLine;
+  int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
+  int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
+  int searchPoint = brakePoint
+                  + (2 * requestingPacketSpeed)
+                  + (2 * VEHICLE_LENGTH);
+
+  // Check for vehicles to yield for in this line
+  int nextPacketBrakePoint = INT_MAX;
+  int nextPacketIndex = -1;
+  unsigned int nextPacketID = INT_MAX;
+
+  bool checkForBlocking = false;
+
+  if (requestingPacketIndex == -1 // The requesting packet is external to this line,
+      && !_packets.NOW().empty()) // and there is a blocking packet in this line
+  {
+    TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(_packets.NOW().back());
+
+    if (nextPacket->mutableData.NOW().positionAtLine < searchPoint) //within search distance
+    {
+      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+      int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+
+      nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+      nextPacketIndex = _packets.NOW().size() - 1;
+      nextPacketID = _packets.NOW()[nextPacketIndex];
+
+      checkForBlocking = true;
+    }
+  }
+  else if (requestingPacketIndex > 0 // The requesting vehicle is in this line (but not first)
+      && requestingPacketIndex < static_cast<int>(_packets.NOW().size()))
+  {
+    nextPacketIndex = requestingPacketIndex - 1;
+    nextPacketID = _packets.NOW()[nextPacketIndex];
+
+    TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+
+    if (nextPacket == requestingPacket)
+    {
+      std::cerr << "Serious error: Transport Network Packet " << nextPacketID << " is waiting for itself!" << std::endl;
+    }
+    int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+    int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+
+    nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+    checkForBlocking = true;
+  }
+
+  if (checkForBlocking)
+  {
+    if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
+    {
+      // Must brake in order not to risk colliding
+      return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = true};
+    }
+    else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+        >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
+    {
+      // May not safely increase the speed
+      return {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = true};
+    }
+  }
+
+  // Continue searches from end of line,
+  // but only if search does not distance out before that.
+  if (searchPoint > m_length)
+  {
+    // Perform backward search on interfering lines,
+    // for yielding for that traffic.
+#if 0
+    for (std::vector<Line*>::const_iterator interferingLineIt = m_interfering.cbegin();
+        interferingLineIt != m_interfering.cend(); ++interferingLineIt)
+    {
+      if (*interferingLineIt == requestingLine)
+      {
+        continue;
+      }
+
+      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+      vehicleAtEndOfLine.position -= m_length;
+      SpeedActionInfo yieldingResult =
+        (*interferingLineIt)->backwardYieldGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
+
+      if (yieldingResult.speedAction < result.speedAction)
+      {
+        result = yieldingResult;
+      }
+    }
+#endif
+
+#if 0
+    // Perform backward search on cooperating lines,
+    // for mutual merging with that traffic.
+    for (std::vector<Line*>::const_iterator cooperatingLineIt = m_cooperating.cbegin();
+        cooperatingLineIt != m_cooperating.cend(); ++cooperatingLineIt)
+    {
+      // Skip the line containing the vehicle itself.
+      // Otherwise it would brake in order not to collide with itsef...
+      if (*cooperatingLineIt == requestingLine)
+      {
+        continue;
+      }
+
+      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+      vehicleAtEndOfLine.position -= m_length;
+      SpeedActionInfo mergingResult =
+          (*cooperatingLineIt)->backwardMergeGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
+
+      if (mergingResult.speedAction < result.speedAction)
+      {
+        result = mergingResult;
+      }
+    }
+#endif
+
+    // Perform forward search along the route
+    Line * outboundLine = requestingPacket->mutableData.NOW().getNextRoutePoint(this);
+    if (outboundLine != NULL
+        && outboundLine != requestingLine)
+    {
+//      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
+//      vehicleAtEndOfLine.position -= m_length;
+
+//    SpeedActionInfo forwardGetSpeedAction
+//    (TransportNetworkPacket *requestingPacket,
+//     int                     requestingPacketIndex,
+//     Line                   *requestingLine,
+//     int                     requestingLinePosition);
+
+      SpeedActionInfo outboundResult =
+          outboundLine->forwardGetSpeedAction(requestingPacket, -1, requestingLine, requestingPacketPosition - m_length);
+
+      if (outboundResult.speedAction < result.speedAction)
+      {
+        result = outboundResult;
+      }
+    }
+  }
+
+  return result;
 }
 
 /*
@@ -421,7 +893,15 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle
         if ((behindBrakePoint + _vehicles.NOW()[0].speed + VEHICLE_LENGTH)
             >= requestingVehicle->position)
         {
-          return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2), 0}, 0};
+          if (_vehicles.NOW()[0].vehiclesToYieldFor.find(requestingVehicle->id)
+              == _vehicles.NOW()[0].vehiclesToYieldFor.end())
+          {
+            return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2), 0}, 0};
+          }
+          else
+          {
+            std::cout << "Giving right of way to a yielding vehicle." << std::endl;
+          }
         }
       }
 
@@ -632,7 +1112,101 @@ void Line::tick0()
 {
   // Start with blank sheets
   _vehicles.THEN().clear();
+  _packets.THEN().clear();
 
+#if 0
+  if (!_packets.NOW().empty())
+  {
+    std::cout << "Packets on line " << this << ": ";
+    for (std::vector<unsigned int>::const_iterator it = _packets.NOW().cbegin();
+        it != _packets.NOW().cend(); ++it)
+    {
+//      int packetIndex = std::distance(_packets.NOW().cbegin(), it);
+      int packetNumber = *it;
+      std::cout << packetNumber << ", ";
+    }
+    std::cout << std::endl;
+  }
+#endif
+
+  // Move all the packets
+  for (std::vector<unsigned int>::const_iterator it = _packets.NOW().cbegin();
+      it != _packets.NOW().cend(); ++it)
+  {
+    TransportNetworkPacket * packet = p_transportNetwork->getPacket(*it);
+    int packetIndex = std::distance(_packets.NOW().cbegin(), it);
+    int distance = packet->mutableData.NOW().positionAtLine;
+
+    SpeedActionInfo nextSpeedActionInfo = forwardGetSpeedAction(packet, packetIndex, this, distance);
+
+    SpeedAction previousAction = packet->mutableData.NOW().speedAction;
+    SpeedAction nextAction = nextSpeedActionInfo.speedAction;
+
+    int previousSpeed = packet->mutableData.NOW().speed;
+    int nextSpeed = previousSpeed;
+
+    switch (nextAction)
+    {
+      case BRAKE:
+        nextSpeed -= BRAKE_ACCELERATION;
+        if (nextSpeed < 0)
+        {
+          nextSpeed = 0;
+        }
+        break;
+      case INCREASE:
+        nextSpeed += SPEEDUP_ACCELERATION;
+        if (nextSpeed > packet->preferredSpeed)
+        {
+          nextSpeed = packet->preferredSpeed;
+        }
+        break;
+      default:
+        break;
+    }
+
+    packet->mutableData.THEN() = packet->mutableData.NOW();
+
+    packet->mutableData.THEN().waitingFor = nextSpeedActionInfo.blockedBy;
+    packet->mutableData.THEN().physicallyBlocked = nextSpeedActionInfo.physicallyBlocked;
+    packet->mutableData.THEN().line = this;
+
+    packet->mutableData.THEN().speedAction = nextAction;
+    packet->mutableData.THEN().speed = nextSpeed;
+    int nextPosition = distance + nextSpeed;
+    packet->mutableData.THEN().positionAtLine = nextPosition;
+
+    if (nextPosition < m_length)
+    {
+      _packets.THEN().push_back(*it);
+    }
+    else
+    {
+      // Move overflowing vehicles to next line
+      packet->mutableData.THEN().positionAtLine -= m_length;
+      // Choose out line to put the vehicle based on vehicle route.
+      if (!m_out.empty())
+      {
+        Line * nextLine = packet->mutableData.NOW().getNextRoutePoint(this);
+        if (!nextLine)
+        {
+          if (!m_out.empty())
+          {
+            nextLine = m_out[rand() % m_out.size()];
+          }
+          else
+          {
+            std::cerr << "No route found for packet" << *it
+                      << " of line " << this << std::endl;
+            return;
+          }
+        }
+        nextLine->deliverPacket(this, *it);
+      }
+    }
+  }
+
+#if 0
   // Move all the vehicles
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
@@ -646,11 +1220,17 @@ void Line::tick0()
     SpeedAction previousAction = it->speedActionInfo.speedAction;
     SpeedAction thisAction = newVehicle.speedActionInfo.speedAction;
 
+    // Count the time passed in the same action.
+    if (previousAction == thisAction)
+    {
+      newVehicle.speedActionInfo.timeSinceLastActionChange = it->speedActionInfo.timeSinceLastActionChange + 1;
+    }
+
     // Vehicle has been stopped for some time. Are we gridlocked?
     if (newVehicle.speed == 0
         && (thisAction == BRAKE || thisAction == MAINTAIN)
         && newVehicle.speedActionInfo.culprit.line != this
-        && newVehicle.speedActionInfo.timeSinceLastActionChange >= 5)
+        && newVehicle.speedActionInfo.timeSinceLastActionChange >= 2)
     {
       // We have already checked that we are at a complete stand-still,
       // that we are indeed at an intersection (waiting for a separate line),
@@ -664,25 +1244,6 @@ void Line::tick0()
       // for a hard coded magic number of ticks before starting the search
       // will probably suffice.
 
-      // TODO Detect loop, by following path of culprits until:
-      //
-      //      A) A vehicle is reached which is not waiting for another vehicle.
-      //      B) A loop is detected, but this vehicle is not in the loop.
-      //      C) We get back to this vehicle.
-      //
-      //      In case of A or B, not a loop, wait before trying again.
-      //      * Possibly by resetting timeSinceLastActionChange?
-      //      * Renaming that variable to better reflect its use?
-      //      * Store it not as part of the speedActionInfo, but rather
-      //        in the vehicleInfo structure itself, as that seems a more
-      //        reasonable place to have it?
-      //
-      //      In case of C, further checking is necessary:
-      //      D) The one waiting for this vehicle, has been waiting the longest
-      //         in the entire loop. (Tie-breaker: Vehicle ID)
-      //
-      //      In case of D, add D to "vehiclesToYieldFor".
-
       SpeedActionInfo comingFromSpeedActionInfo = newVehicle.speedActionInfo;
       SpeedActionInfo goingToSpeedActionInfo;
       int thisVehicleId = newVehicle.id;
@@ -694,6 +1255,23 @@ void Line::tick0()
       for (int timeout = newVehicle.speedActionInfo.timeSinceLastActionChange;
           timeout > 0; --timeout)
       {
+        // Break if not waiting
+        if (comingFromSpeedActionInfo.culprit.line == NULL)
+        {
+          break;
+        }
+
+        // FIXME WTF? Why does this even happen?
+        if (comingFromSpeedActionInfo.culprit.line->getVehicle(comingFromSpeedActionInfo.culprit.index) == NULL)
+        {
+          std::cout
+            << "Invalid index ("
+            << comingFromSpeedActionInfo.culprit.index
+            << ") for culprit."
+            << std::endl;
+          break;
+        }
+
         VehicleInfo goingToVehicleInfo = *comingFromSpeedActionInfo.culprit.line->getVehicle(comingFromSpeedActionInfo.culprit.index);
         goingToSpeedActionInfo = goingToVehicleInfo.speedActionInfo;
 
@@ -731,6 +1309,7 @@ void Line::tick0()
 
         else if (comingFromId == longestWaitCandidateId)
         {
+          std::cout << "Solvable loop detected for ID " << comingFromId << std::endl;
           newVehicle.vehiclesToYieldFor.insert(comingFromId);
           break;
         }
@@ -754,12 +1333,6 @@ void Line::tick0()
         && newVehicle.vehiclesToYieldFor.size())
     {
       newVehicle.vehiclesToYieldFor.clear();
-    }
-
-    // Count the time passed in the same action.
-    if (previousAction == thisAction)
-    {
-      newVehicle.speedActionInfo.timeSinceLastActionChange = it->speedActionInfo.timeSinceLastActionChange + 1;
     }
 
     switch (thisAction)
@@ -813,16 +1386,17 @@ void Line::tick0()
       }
     }
   }
+#endif
 }
 
 void Line::tick1()
 {
-  // Fetch all incoming vehicles from inboxes, in sorted order
-  std::map<Line*, std::vector<VehicleInfo> >::iterator lineInFrontIt = m_vehicleInboxes.begin();
-  while (lineInFrontIt != m_vehicleInboxes.end())
+  // Fetch all incoming packets from inboxes, in sorted order
+  std::map<Line*, std::vector<unsigned int> >::iterator lineInFrontIt = m_packetInboxes.begin();
+  while (lineInFrontIt != m_packetInboxes.end())
   {
-    for (std::map<Line*, std::vector<VehicleInfo> >::iterator lineIt
-        = m_vehicleInboxes.begin(); lineIt != m_vehicleInboxes.end(); lineIt++)
+    for (std::map<Line*, std::vector<unsigned int> >::iterator lineIt
+        = m_packetInboxes.begin(); lineIt != m_packetInboxes.end(); lineIt++)
     {
       if (lineIt->second.empty())
       {
@@ -832,16 +1406,54 @@ void Line::tick1()
       {
         lineInFrontIt = lineIt;
       }
-      else if (lineIt->second.rbegin()->position > lineInFrontIt->second.rbegin()->position)
+      else
       {
-        lineInFrontIt = lineIt;
+        int packetPosition = p_transportNetwork->getPacket(*lineIt->second.rbegin())->mutableData.THEN().positionAtLine;
+        int frontPacketPosition = p_transportNetwork->getPacket(*lineInFrontIt->second.rbegin())->mutableData.THEN().positionAtLine;
+        if (packetPosition > frontPacketPosition)
+        {
+          lineInFrontIt = lineIt;
+        }
       }
     }
     
-    if (lineInFrontIt != m_vehicleInboxes.end() && !lineInFrontIt->second.empty())
+    if (lineInFrontIt != m_packetInboxes.end() && !lineInFrontIt->second.empty())
     {
-      addVehicle(*lineInFrontIt->second.rbegin());
+//      std::cout << "Fetched packet #" << *lineInFrontIt->second.rbegin() << " for line " << this << std::endl;
+      addPacket(*lineInFrontIt->second.rbegin());
       lineInFrontIt->second.pop_back();
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  // Fetch all incoming vehicles from inboxes, in sorted order
+  std::map<Line*, std::vector<VehicleInfo> >::iterator lineInFrontIt2 = m_vehicleInboxes.begin();
+  while (lineInFrontIt2 != m_vehicleInboxes.end())
+  {
+    for (std::map<Line*, std::vector<VehicleInfo> >::iterator lineIt
+        = m_vehicleInboxes.begin(); lineIt != m_vehicleInboxes.end(); lineIt++)
+    {
+      if (lineIt->second.empty())
+      {
+        continue;
+      }
+      if (lineInFrontIt2->second.empty())
+      {
+        lineInFrontIt2 = lineIt;
+      }
+      else if (lineIt->second.rbegin()->position > lineInFrontIt2->second.rbegin()->position)
+      {
+        lineInFrontIt2 = lineIt;
+      }
+    }
+    
+    if (lineInFrontIt2 != m_vehicleInboxes.end() && !lineInFrontIt2->second.empty())
+    {
+      addVehicle(*lineInFrontIt2->second.rbegin());
+      lineInFrontIt2->second.pop_back();
     }
     else
     {
@@ -904,18 +1516,19 @@ void Line::draw()
   glEnd();
 
   float angle = std::atan2(m_endPoint.y - m_beginPoint.y, m_endPoint.x - m_beginPoint.x);
-  // Draw vehicles
+
+  // Draw vehicles / traffic network packets
   const float SCALED_VEHICLE_HEIGHT = static_cast<float>(VEHICLE_HEIGHT) / ZOOM_FACTOR;
   const float HALF_VEHICLE_LENGTH = static_cast<float>(VEHICLE_LENGTH) / 2.0f / ZOOM_FACTOR;
   const float HALF_VEHICLE_WIDTH = static_cast<float>(VEHICLE_WIDTH) / 2.0f / ZOOM_FACTOR;
+
+  // Draw based on VehicleInfo (old, to be removed)
   for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
       it != _vehicles.NOW().cend(); ++it)
   {
     // Calculate vehicle coordinates
-    Coordinates vehicleCoordinates;
-    vehicleCoordinates.x = m_beginPoint.x + (it->position * (m_endPoint.x - m_beginPoint.x) / m_length);
-    vehicleCoordinates.y = m_beginPoint.y + (it->position * (m_endPoint.y - m_beginPoint.y) / m_length);
-    vehicleCoordinates.z = 0.0f;
+    Coordinates vehicleCoordinates = coordinatesFromLineDistance(it->position);
+
     // Draw vehicle
     glPushMatrix();
     glColor3f(it->color[0], it->color[1], it->color[2]);
@@ -939,6 +1552,9 @@ void Line::draw()
       case MAINTAIN:
         glColor3f(1.0f, 1.0f, 0.5f);
         break;
+      case INCREASE:
+        glColor3f(0.5f, 1.0f, 0.5f);
+        break;
       default:
         break;
     }
@@ -947,11 +1563,92 @@ void Line::draw()
     {
       Coordinates culprit = it->speedActionInfo.culprit.line->coordinatesFromLineDistance(it->speedActionInfo.culprit.distance);
       glBegin(GL_LINES);
-      glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, SCALED_VEHICLE_HEIGHT);
+      glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z + SCALED_VEHICLE_HEIGHT);
       glVertex3f(culprit.x, culprit.y, culprit.z);
       glEnd();
     }
   }
+
+  // Failsafe, although it should never happen. TODO Return error code?
+  if (p_transportNetwork == NULL)
+  {
+    return;
+  }
+
+  // Draw based on transport network packets (new, keep)
+  for (std::vector<unsigned int>::const_iterator it = _packets.NOW().cbegin();
+      it != _packets.NOW().cend(); ++it)
+  {
+    TransportNetworkPacket * packet = p_transportNetwork->getPacket(*it);
+    if (packet == NULL)
+    {
+      continue;
+    }
+    TransportNetworkPacketMutableData const * mutableData = &packet->mutableData.NOW();
+
+    Coordinates vehicleCoordinates = coordinatesFromLineDistance(mutableData->positionAtLine);
+
+    Vehicle const * vehicle = packet->vehicle;
+    if (vehicle == 0)
+    {
+      vehicle = &DEFAULT_VEHICLE;
+    }
+
+    // Draw packet
+    glPushMatrix();
+    glColor3f(vehicle->color[0], vehicle->color[1], vehicle->color[2]);
+    glTranslatef(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z);
+    glRotatef(angle * 180 / M_PI, 0.0f, 0.0f, 1.0f);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(0.0f, 0.0f, SCALED_VEHICLE_HEIGHT);
+    glVertex3f( HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f(-HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f(-HALF_VEHICLE_LENGTH, -HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f( HALF_VEHICLE_LENGTH, -HALF_VEHICLE_WIDTH, 0.0f);
+    glVertex3f( HALF_VEHICLE_LENGTH,  HALF_VEHICLE_WIDTH, 0.0f);
+    glEnd();
+
+    // Draw lines towards the packet that this packet is waiting for
+    switch (packet->mutableData.NOW().speedAction)
+    {
+      case BRAKE:
+        glColor3f(1.0f, 0.5f, 0.5f);
+        break;
+      case MAINTAIN:
+        glColor3f(1.0f, 1.0f, 0.5f);
+        break;
+      case INCREASE:
+        glColor3f(0.5f, 1.0f, 0.5f);
+        break;
+      default:
+        break;
+    }
+
+    float pointerSize = SCALED_VEHICLE_HEIGHT * 0.25f;
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(0.0f, 0.0f, SCALED_VEHICLE_HEIGHT * 3);
+    glVertex3f( pointerSize,  pointerSize, SCALED_VEHICLE_HEIGHT * 2);
+    glVertex3f(-pointerSize,  pointerSize, SCALED_VEHICLE_HEIGHT * 2);
+    glVertex3f(-pointerSize, -pointerSize, SCALED_VEHICLE_HEIGHT * 2);
+    glVertex3f( pointerSize, -pointerSize, SCALED_VEHICLE_HEIGHT * 2);
+    glVertex3f( pointerSize,  pointerSize, SCALED_VEHICLE_HEIGHT * 2);
+    glEnd();
+    glPopMatrix();
+
+    TransportNetworkPacket * culpritPacket = p_transportNetwork->getPacket(packet->mutableData.NOW().waitingFor);
+    if (culpritPacket != NULL && culpritPacket->mutableData.NOW().line != NULL)
+    {
+      Coordinates culprit = culpritPacket->mutableData.NOW().line->coordinatesFromLineDistance(culpritPacket->mutableData.NOW().positionAtLine);
+
+      glBegin(GL_LINES);
+      glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z + SCALED_VEHICLE_HEIGHT);
+      glVertex3f(culprit.x, culprit.y, culprit.z);
+      glEnd();
+    }
+
+  }
+
 }
 
 std::vector<VehicleInfo> Line::getVehicles()
@@ -999,7 +1696,7 @@ Coordinates Line::coordinatesFromLineDistance(int distance)
   Coordinates coords;
   coords.x = m_beginPoint.x + (distance * (m_endPoint.x - m_beginPoint.x) / m_length);
   coords.y = m_beginPoint.y + (distance * (m_endPoint.y - m_beginPoint.y) / m_length);
-  coords.z = 0.0f;
+  coords.z = m_beginPoint.z + (distance * (m_endPoint.z - m_beginPoint.z) / m_length);
   return coords;
 }
 
