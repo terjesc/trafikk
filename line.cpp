@@ -481,9 +481,9 @@ static int calculateBrakePoint(Blocker const *blocker)
 }
 
 /*
- * Forward search for whether a vehicle may accelerate or must brake
+ * Forward search for whether a packet may accelerate or must brake
  *
- * requestingVehicle.distance relative to this line
+ * requestingPacketPosition relative to this line
  */
 SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPacket,
                                             int                     requestingPacketIndex,
@@ -492,7 +492,6 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
 {
   SpeedActionInfo result = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
 
-//  int requestingPacketPosition = requestingLinePosition + requestingPacket->mutableData.NOW().positionAtLine;
   int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
   int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
   int searchPoint = brakePoint
@@ -504,48 +503,26 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
   int nextPacketIndex = -1;
   unsigned int nextPacketID = INT_MAX;
 
-  bool checkForBlocking = false;
-
   if (requestingPacketIndex == -1 // The requesting packet is external to this line,
-      && !_packets.NOW().empty()) // and there is a blocking packet in this line
+      && !_packets.NOW().empty()) // and there is a packet in this line
   {
-    TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(_packets.NOW().back());
-
-    if (nextPacket->mutableData.NOW().positionAtLine < searchPoint) //within search distance
-    {
-      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
-      int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
-
-      nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
-
-      nextPacketIndex = _packets.NOW().size() - 1;
-      nextPacketID = _packets.NOW()[nextPacketIndex];
-
-      checkForBlocking = true;
-    }
+    nextPacketIndex = _packets.NOW().size() - 1;
   }
   else if (requestingPacketIndex > 0 // The requesting vehicle is in this line (but not first)
       && requestingPacketIndex < static_cast<int>(_packets.NOW().size()))
   {
     nextPacketIndex = requestingPacketIndex - 1;
-    nextPacketID = _packets.NOW()[nextPacketIndex];
-
-    TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
-
-    if (nextPacket == requestingPacket)
-    {
-      std::cerr << "Serious error: Transport Network Packet " << nextPacketID << " is waiting for itself!" << std::endl;
-    }
-    int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
-    int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
-
-    nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
-
-    checkForBlocking = true;
   }
 
-  if (checkForBlocking)
+  if (nextPacketIndex != -1) // There is a next packet in this line
   {
+    nextPacketID = _packets.NOW()[nextPacketIndex];
+    TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+
+    int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+    int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+    nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
     if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
     {
       // Must brake in order not to risk colliding
@@ -563,9 +540,10 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
   // but only if search does not distance out before that.
   if (searchPoint > m_length)
   {
+    int adjustedPosition = requestingPacketPosition - m_length;
+
     // Perform backward search on interfering lines,
     // for yielding for that traffic.
-#if 0
     for (std::vector<Line*>::const_iterator interferingLineIt = m_interfering.cbegin();
         interferingLineIt != m_interfering.cend(); ++interferingLineIt)
     {
@@ -574,19 +552,17 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
         continue;
       }
 
-      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
-      vehicleAtEndOfLine.position -= m_length;
       SpeedActionInfo yieldingResult =
-        (*interferingLineIt)->backwardYieldGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
+        (*interferingLineIt)->backwardYieldGetSpeedAction(requestingPacket,
+                                                          requestingLine,
+                                                          adjustedPosition);
 
       if (yieldingResult.speedAction < result.speedAction)
       {
         result = yieldingResult;
       }
     }
-#endif
 
-#if 0
     // Perform backward search on cooperating lines,
     // for mutual merging with that traffic.
     for (std::vector<Line*>::const_iterator cooperatingLineIt = m_cooperating.cbegin();
@@ -598,35 +574,24 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
       {
         continue;
       }
-
-      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
-      vehicleAtEndOfLine.position -= m_length;
       SpeedActionInfo mergingResult =
-          (*cooperatingLineIt)->backwardMergeGetSpeedAction(&vehicleAtEndOfLine, requestingLine);
-
+          (*cooperatingLineIt)->backwardMergeGetSpeedAction(requestingPacket,
+                                                            requestingLine,
+                                                            adjustedPosition);
       if (mergingResult.speedAction < result.speedAction)
       {
         result = mergingResult;
       }
     }
-#endif
 
     // Perform forward search along the route
     Line * outboundLine = requestingPacket->mutableData.NOW().getNextRoutePoint(this);
     if (outboundLine != NULL
         && outboundLine != requestingLine)
     {
-//      VehicleInfo vehicleAtEndOfLine = *requestingVehicle;
-//      vehicleAtEndOfLine.position -= m_length;
-
-//    SpeedActionInfo forwardGetSpeedAction
-//    (TransportNetworkPacket *requestingPacket,
-//     int                     requestingPacketIndex,
-//     Line                   *requestingLine,
-//     int                     requestingLinePosition);
-
+      const int INDEX_EXTERNAL = -1;
       SpeedActionInfo outboundResult =
-          outboundLine->forwardGetSpeedAction(requestingPacket, -1, requestingLine, requestingPacketPosition - m_length);
+          outboundLine->forwardGetSpeedAction(requestingPacket, INDEX_EXTERNAL, requestingLine, adjustedPosition);
 
       if (outboundResult.speedAction < result.speedAction)
       {
@@ -756,6 +721,120 @@ SpeedActionInfo Line::forwardGetSpeedAction(VehicleInfo *requestingVehicle,
 }
 
 /*
+ * Backward search for whether a packet may accelerate or must brake
+ *
+ * requestingPacketPosition relative to the end of this line
+ */
+
+SpeedActionInfo Line::backwardMergeGetSpeedAction(TransportNetworkPacket * requestingPacket,
+                                                  Line                   * requestingLine,
+                                                  int                      requestingPacketPosition)
+{
+  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+  // The search should have started with the requesting line,
+  // so if we get back to the requesting line we can safely
+  // return the "best case" action.
+  if (requestingLine == this)
+  {
+    return RESULT_INCREASE;
+  }
+
+  // Default to increase speed.
+  SpeedActionInfo result = RESULT_INCREASE;
+
+  // Adjust position so that the requesting line is relative to
+  // the beginning of this line, not the end.
+  requestingPacketPosition += m_length;
+
+  if (requestingPacketPosition > m_length)
+  {
+    // The corresponding position is after the end of this line.
+    return RESULT_INCREASE;
+  }
+  else if (requestingPacketPosition < 0)
+  {
+    // The corresponding position is before the beginning of this line.
+    // First, check with all inbound lines.
+    for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+          inboundLineIt != m_in.cend(); ++inboundLineIt)
+    {
+      SpeedActionInfo nestedResult
+        = (*inboundLineIt)->backwardMergeGetSpeedAction(requestingPacket,
+                                                        requestingLine,
+                                                        requestingPacketPosition);
+
+      if (nestedResult.speedAction < result.speedAction)
+      {
+        result = nestedResult;
+      }
+    }
+
+    //  Second, check with this blocker, as it might be relevant
+    if (!_packets.NOW().empty())
+    {
+      int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
+      int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
+
+      int nextPacketIndex = _packets.NOW().size() - 1;
+      unsigned int nextPacketID = _packets.NOW()[nextPacketIndex];
+      TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+      int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+      int nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+      if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
+      {
+        // Must brake in order not to risk colliding
+        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+      }
+      else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+          >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
+      {
+        // May not safely increase the speed
+        result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+      }
+    }
+  }
+  else
+  {
+    // The corresponding position is on this line.
+    // Find and act on the first vehicle after the corresponding position.
+    for (std::vector<unsigned int>::const_reverse_iterator packetIDIt = _packets.NOW().crbegin();
+        packetIDIt != _packets.NOW().crend(); ++packetIDIt)
+    {
+      unsigned int nextPacketID = *packetIDIt;
+      TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+
+      if (nextPacketDistance > requestingPacketPosition)
+      {
+        int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
+        int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
+
+        int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+        int nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+        if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
+        {
+          // Must brake in order not to risk colliding
+          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+        else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+            >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
+        {
+          // May not safely increase the speed
+          result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+
+        break; // We are finished, as we found and handled the closest vehicle.
+      }
+    }
+  }
+
+  return result;
+}
+
+/*
  * Backward search for whether a vehicle may accelerate or must brake
  *
  * requestingVehicle.distance relative to the end of this line
@@ -846,6 +925,222 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle
         {
           // May not safely increase the speed
           result = {MAINTAIN, {this, nextVehicleDistance + (VEHICLE_LENGTH / 2), nextVehicleIndex}, 0};
+        }
+
+        break; // We are finished, as we found and handled the closest vehicle.
+      }
+    }
+  }
+
+  return result;
+}
+
+SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requestingPacket,
+                                                  Line                    * requestingLine,
+                                                  int                       requestingPacketPosition)
+{
+  bool yield = true;
+
+  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+  // The search should have started with the requesting line,
+  // so if we get back to the requesting line we can safely
+  // return the "best case" action.
+  if (requestingLine == this)
+  {
+    return RESULT_INCREASE;
+  }
+
+  // Default to increase speed.
+  SpeedActionInfo result = RESULT_INCREASE;
+
+  // Adjust position so that the requesting line is relative to
+  // the beginning of this line, not the end.
+  requestingPacketPosition += m_length;
+
+  if (requestingPacketPosition > m_length)
+  {
+    // The corresponding position is after the end of this line.
+    // For yielding behaviour there might be blockers here.
+    if (yield && requestingPacketPosition
+        <= m_length + SPEED + (pow(SPEED, 2) / (2 * BRAKE_ACCELERATION)))
+    {
+      // If the front packet in this line has a brake point further along
+      // than requstingPacketPosition, then return BRAKE
+      if (!_packets.NOW().empty())
+      {
+        int nextPacketIndex = 0;
+        unsigned int nextPacketID = _packets.NOW()[nextPacketIndex];
+        TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+
+        int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+        int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+        int nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+        if ((nextPacketBrakePoint + nextPacketSpeed + VEHICLE_LENGTH)
+            >= requestingPacketPosition)
+        {
+          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+#if 0
+          if (_vehicles.NOW()[0].vehiclesToYieldFor.find(requestingVehicle->id)
+              == _vehicles.NOW()[0].vehiclesToYieldFor.end())
+          {
+            return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2), 0}, 0};
+          }
+          else
+          {
+            std::cout << "Giving right of way to a yielding vehicle." << std::endl;
+          }
+#endif
+        }
+      }
+
+      // Continue looping recursively, return BRAKE at once if found.
+      for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+            inboundLineIt != m_in.cend(); ++inboundLineIt)
+      {
+        SpeedActionInfo nestedResult
+          = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingPacket,
+                                                          requestingLine,
+                                                          requestingPacketPosition);
+
+        if (nestedResult.speedAction < result.speedAction)
+        {
+          result = nestedResult;
+        }
+      }
+    }
+  }
+  else if (requestingPacketPosition < 0)
+  {
+    // The corresponding position is before the beginning of this line.
+    // First, check with all inbound lines.
+    for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+          inboundLineIt != m_in.cend(); ++inboundLineIt)
+    {
+      SpeedActionInfo nestedResult
+        = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingPacket,
+                                                        requestingLine,
+                                                        requestingPacketPosition);
+
+      if (nestedResult.speedAction < result.speedAction)
+      {
+        result = nestedResult;
+      }
+    }
+
+    //  Second, check with this blocker, as it might be relevant
+    if (!_vehicles.NOW().empty())
+    {
+      int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
+      int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
+
+      int nextPacketIndex = 0;
+      unsigned int nextPacketID = _packets.NOW()[nextPacketIndex];
+      TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+
+      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+      int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+      int nextPacketBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+      if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
+      {
+        // Must brake in order not to risk colliding
+        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+      }
+      else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+          >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
+      {
+        // May not safely increase the speed
+        result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+      }
+    }
+  }
+  else
+  {
+    // The corresponding position is on this line.
+    // Find and act on the first vehicle after the corresponding position.
+    for (std::vector<unsigned int>::const_reverse_iterator packetIDIt = _packets.NOW().crbegin();
+        packetIDIt != _packets.NOW().crend(); ++packetIDIt)
+    {
+      // FIXME WTF is the purpose and meaning of this if block?
+      // It looks like yielding for an incoming car which is further back,
+      // but the "3 times max speed behind" logic seems strange. Is there
+      // another calculation that would make more sense?
+      unsigned int nextPacketID = *packetIDIt;
+      TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
+      int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
+
+      if (nextPacketDistance + (3 * SPEED)
+              >= requestingPacketPosition)
+      {
+        // FIXME It looks like the direction of iterating through vehicles
+        //       means that the culprit the furthest back will trigger
+        //       this BRAKE action, when a vehicle further ahead will also
+        //       be a valid culprit. This results in a longer gridlock loop
+        //       has to be detected than if the first culprit in the line
+        //       got registered instead of the last.
+        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+      }
+
+      if (nextPacketDistance > requestingPacketPosition)
+      {
+        int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
+        int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
+
+        int nextPacketSpeed = nextPacket->mutableData.NOW().speed;
+        int nextBrakePoint = calculateBrakePoint(nextPacketDistance, nextPacketSpeed);
+
+        if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextBrakePoint)
+        {
+          // Must brake in order not to risk colliding
+          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+        else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
+            >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
+        {
+          // May not safely increase the speed
+          result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+
+        // If yielding, see if the previous vehicle is also too close
+        if (yield)
+        {
+          if (packetIDIt == _packets.NOW().crbegin())
+          {
+            // The vehicle "in front of" is the last vehicle in this line,
+            // so the vehicle "behind" is in an incoming line.
+            for (std::vector<Line*>::const_iterator inboundLineIt = m_in.cbegin();
+                  inboundLineIt != m_in.cend(); ++inboundLineIt)
+            {
+              SpeedActionInfo nestedResult
+                = (*inboundLineIt)->backwardYieldGetSpeedAction(requestingPacket,
+                                                                requestingLine,
+                                                                requestingPacketPosition);
+
+              if (nestedResult.speedAction < result.speedAction)
+              {
+                result = nestedResult;
+              }
+            }
+          }
+          else
+          {
+            // The vehicle "behind" is in this line.
+            std::vector<unsigned int>::const_reverse_iterator hindPacketIDIt = packetIDIt - 1;
+
+            unsigned int hindPacketID = *hindPacketIDIt;
+            TransportNetworkPacket * hindPacket = p_transportNetwork->getPacket(hindPacketID);
+            int hindPacketDistance = hindPacket->mutableData.NOW().positionAtLine;
+            int hindPacketSpeed = hindPacket->mutableData.NOW().speed;
+            int hindPacketBrakePoint = calculateBrakePoint(hindPacketDistance, hindPacketSpeed);
+
+            if ((hindPacketBrakePoint + hindPacketSpeed + VEHICLE_LENGTH)
+                >= requestingPacketPosition)
+            {
+              // The other vehicle may have to brake for us. We can not have that.
+              return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = hindPacketID, .physicallyBlocked = false};
+            }
+          }
         }
 
         break; // We are finished, as we found and handled the closest vehicle.
@@ -1635,6 +1930,8 @@ void Line::draw()
     glVertex3f( pointerSize,  pointerSize, SCALED_VEHICLE_HEIGHT * 2);
     glEnd();
     glPopMatrix();
+
+    glColor3f(vehicle->color[0], vehicle->color[1], vehicle->color[2]);
 
     TransportNetworkPacket * culpritPacket = p_transportNetwork->getPacket(packet->mutableData.NOW().waitingFor);
     if (culpritPacket != NULL && culpritPacket->mutableData.NOW().line != NULL)

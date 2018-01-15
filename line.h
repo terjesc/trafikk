@@ -186,7 +186,16 @@ class Line : public ControllerUser
     SpeedActionInfo backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
     SpeedActionInfo backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
 
-    SpeedActionInfo forwardGetSpeedAction(TransportNetworkPacket *requestingPacket, int requestingPacketIndex, Line *requestingLine, int requestingLinePosition);
+    SpeedActionInfo forwardGetSpeedAction(TransportNetworkPacket  * requestingPacket,
+                                          int                       requestingPacketIndex,
+                                          Line                    * requestingLine,
+                                          int                       requestingPacketPosition);
+    SpeedActionInfo backwardMergeGetSpeedAction(TransportNetworkPacket  * requestingPacket,
+                                                Line                    * requestingLine,
+                                                int                       requestingPacketPosition);
+    SpeedActionInfo backwardYieldGetSpeedAction(TransportNetworkPacket  * requestingPacket,
+                                                Line                    * requestingLine,
+                                                int                       requestingPacketPosition);
 
     void addIn(Line * in);
     void addOut(Line * out);

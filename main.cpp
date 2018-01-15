@@ -395,7 +395,7 @@ int main()
    *  1 ->  2 ->  5 -> 12 -> 26 -> 60
    */
 
-#define LIMIT_FRAMERATE 15
+#define LIMIT_FRAMERATE 12
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
   {
