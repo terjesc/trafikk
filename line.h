@@ -27,14 +27,6 @@ enum SpeedAction
   INCREASE
 };
 
-// TODO remove, use VehicleInfo or TransportNetworkPacket directly instead
-struct Blocker
-{
-  int speed;
-  int distance;
-  int index;
-};
-
 class Line; // Forward declaration
 
 // TODO remove SpeedActionCulprit entirely?
@@ -119,32 +111,6 @@ class TransportNetwork
     void draw();
 };
 
-class VehicleInfo
-{
-  public:
-    int id;
-    int speed;
-    int preferredSpeed;
-    int position;
-    float color[3];
-    std::deque<Line *> route;
-    SpeedActionInfo speedActionInfo;
-    std::set<int> vehiclesToYieldFor;
-
-    void addRoutePoint(Line * line)
-    {
-      route.push_back(line);
-    }
-
-    void removeRoutePoint()
-    {
-      route.pop_front();
-    }
-
-    void fillRoute(Line * line);
-    Line * getNextRoutePoint(Line *line);
-};
-
 struct Coordinates
 {
   float x, y, z;
@@ -153,38 +119,24 @@ struct Coordinates
 class Line : public ControllerUser
 {
   private:
-    LockStepValue<Blocker> _blocker;
-    LockStepValue<std::vector<VehicleInfo> > _vehicles;
     LockStepValue<std::vector<unsigned int> > _packets;
-    LockStepValue<int> tickNumber;
     std::vector<Line *> m_out;
     std::vector<Line *> m_in;
     std::vector<Line *> m_cooperating;
     std::vector<Line *> m_interfering;
     int m_length;
-    std::map<Line*, std::vector<VehicleInfo> > m_vehicleInboxes;
     std::map<Line*, std::vector<unsigned int> > m_packetInboxes;
     Coordinates m_beginPoint, m_endPoint;
     TransportNetwork * p_transportNetwork;
 
   public:
-#if 0
-    void makeRoutesForVehicles();
-#endif
     static int totalNumberOfVehicles;
 
     Line(Controller *controller, Coordinates* beginPoint = NULL, Coordinates* endPoint = NULL, TransportNetwork * transportNetwork = NULL);
     Line(Controller *controller, Coordinates beginPoint, Coordinates endPoint, TransportNetwork * transportNetwork = NULL);
 
-    void addVehicle(VehicleInfo vehicleInfo);
-    void deliverVehicle(Line * senderLine, VehicleInfo vehicleInfo);
-
     void addPacket(unsigned int packetId);
     bool deliverPacket(Line * senderLine, unsigned int packetId);
-
-    SpeedActionInfo forwardGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine, int requestingVehicleIndex = -1);
-    SpeedActionInfo backwardMergeGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
-    SpeedActionInfo backwardYieldGetSpeedAction(VehicleInfo *requestingVehicle, Line* requestingLine);
 
     SpeedActionInfo forwardGetSpeedAction(TransportNetworkPacket  * requestingPacket,
                                           int                       requestingPacketIndex,
@@ -208,13 +160,9 @@ class Line : public ControllerUser
     virtual void tick(int tickType);
     void tick0();
     void tick1();
-    void print();
     void draw();
-    std::vector<VehicleInfo> getVehicles();
-    VehicleInfo const * getVehicle(int index) const;
     void moveRight(float distance = 0.2f);
 
-    Coordinates coordinatesFromVehicleIndex(int index);
     Coordinates coordinatesFromLineDistance(int distance);
 };
 
