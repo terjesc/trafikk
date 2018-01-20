@@ -395,7 +395,7 @@ int main()
    *  1 ->  2 ->  5 -> 12 -> 26 -> 60
    */
 
-#define LIMIT_FRAMERATE 12
+#define LIMIT_FRAMERATE 60
   // Framerate and sync settings
   if (LIMIT_FRAMERATE)
   {
@@ -512,7 +512,7 @@ int main()
     
     // Camera position
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -35.0f); // Go back (zoom out, fixed)
+    glTranslatef(0.0f, 0.0f, -25.0f); // Go back (zoom out, fixed)
     glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Tilt (fixed)
     glRotatef(-10.0f, 0.0f, 0.0f, 1.0f); // Rotate (fixed)
 

@@ -97,6 +97,7 @@ TransportNetwork::TransportNetwork(Controller *controller)
 unsigned int TransportNetwork::addPacket(TransportNetworkPacket packet, Line * line)
 {
   unsigned int packetIndex = nextPacketIndex();
+  packet.id = packetIndex;
   m_packets.insert({packetIndex, packet});
   line->deliverPacket(line, packetIndex);
   return packetIndex;
@@ -381,7 +382,7 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
                                             Line                   *requestingLine,
                                             int                     requestingPacketPosition)
 {
-  SpeedActionInfo result = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+  SpeedActionInfo result = {.speedAction = INCREASE, .blockedBy = INT_MAX, .physicallyBlocked = false};
 
   int requestingPacketSpeed = requestingPacket->mutableData.NOW().speed;
   int brakePoint = calculateBrakePoint(requestingPacketPosition, requestingPacketSpeed);
@@ -417,13 +418,13 @@ SpeedActionInfo Line::forwardGetSpeedAction(TransportNetworkPacket *requestingPa
     if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
     {
       // Must brake in order not to risk colliding
-      return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = true};
+      return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = true};
     }
     else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
         >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
     {
       // May not safely increase the speed
-      return {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = true};
+      return {.speedAction = MAINTAIN, .blockedBy = nextPacketID, .physicallyBlocked = true};
     }
   }
 
@@ -504,7 +505,12 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(TransportNetworkPacket * reque
                                                   Line                   * requestingLine,
                                                   int                      requestingPacketPosition)
 {
-  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .blockedBy = INT_MAX, .physicallyBlocked = false};
+
+  // TODO FIXME remove the premature return
+  return RESULT_INCREASE;
+  // TODO FIXME remove the premature return
+
   // The search should have started with the requesting line,
   // so if we get back to the requesting line we can safely
   // return the "best case" action.
@@ -559,13 +565,13 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(TransportNetworkPacket * reque
       if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
       }
       else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        result = {.speedAction = MAINTAIN, .blockedBy = nextPacketID, .physicallyBlocked = false};
       }
     }
   }
@@ -591,13 +597,13 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(TransportNetworkPacket * reque
         if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
         }
         else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          result = {.speedAction = MAINTAIN, .blockedBy = nextPacketID, .physicallyBlocked = false};
         }
 
         break; // We are finished, as we found and handled the closest vehicle.
@@ -620,7 +626,7 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
 {
   bool yield = true;
 
-  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = INT_MAX, .physicallyBlocked = false};
+  const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .blockedBy = INT_MAX, .physicallyBlocked = false};
   // The search should have started with the requesting line,
   // so if we get back to the requesting line we can safely
   // return the "best case" action.
@@ -658,18 +664,17 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
         if ((nextPacketBrakePoint + nextPacketSpeed + VEHICLE_LENGTH)
             >= requestingPacketPosition)
         {
-          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
-#if 0
-          if (_vehicles.NOW()[0].vehiclesToYieldFor.find(requestingVehicle->id)
-              == _vehicles.NOW()[0].vehiclesToYieldFor.end())
+          // Gridlock prevention; yield on right-of-way in certain situations
+          if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+              == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
           {
-            return {BRAKE, {this, behindVehicleDistance + (VEHICLE_LENGTH / 2), 0}, 0};
+            return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
           }
           else
           {
-            std::cout << "Giving right of way to a yielding vehicle." << std::endl;
+            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+            return RESULT_INCREASE;
           }
-#endif
         }
       }
 
@@ -724,13 +729,33 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
       if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextPacketBrakePoint)
       {
         // Must brake in order not to risk colliding
-        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        // Gridlock prevention; yield on right-of-way in certain situations
+        if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+            == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+        {
+          return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+        else
+        {
+          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+          return RESULT_INCREASE;
+        }
       }
       else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
           >= std::max(0, nextPacketBrakePoint - BRAKE_ACCELERATION))
       {
         // May not safely increase the speed
-        result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        // Gridlock prevention; yield on right-of-way in certain situations
+        if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+            == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+        {
+          result = {.speedAction = MAINTAIN, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+        else
+        {
+          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+          return RESULT_INCREASE;
+        }
       }
     }
   }
@@ -738,27 +763,38 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
   {
     // The corresponding position is on this line.
     // Find and act on the first vehicle after the corresponding position.
+ 
+    // FIXME It looks like the direction of iterating through vehicles
+    //       means that the culprit the furthest back will trigger
+    //       this BRAKE action, when a vehicle further ahead will also
+    //       be a valid culprit. This results in a longer gridlock loop
+    //       has to be detected than if the first culprit in the line
+    //       got registered instead of the last.
     for (std::vector<unsigned int>::const_reverse_iterator packetIDIt = _packets.NOW().crbegin();
         packetIDIt != _packets.NOW().crend(); ++packetIDIt)
     {
-      // FIXME WTF is the purpose and meaning of this if block?
-      // It looks like yielding for an incoming car which is further back,
-      // but the "3 times max speed behind" logic seems strange. Is there
-      // another calculation that would make more sense?
       unsigned int nextPacketID = *packetIDIt;
       TransportNetworkPacket * nextPacket = p_transportNetwork->getPacket(nextPacketID);
       int nextPacketDistance = nextPacket->mutableData.NOW().positionAtLine;
 
+      // FIXME The "3 times max speed behind" logic seems strange. Is there
+      // another calculation that would make more sense? Reasoning behind
+      // this formula should be documented somewhere. Here we yield for
+      // incoming car which is behind us, within 3 times max speed distance.
       if (nextPacketDistance + (3 * SPEED)
               >= requestingPacketPosition)
       {
-        // FIXME It looks like the direction of iterating through vehicles
-        //       means that the culprit the furthest back will trigger
-        //       this BRAKE action, when a vehicle further ahead will also
-        //       be a valid culprit. This results in a longer gridlock loop
-        //       has to be detected than if the first culprit in the line
-        //       got registered instead of the last.
-        return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        // Gridlock prevention; yield on right-of-way in certain situations
+        if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+            == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+        {
+          return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
+        }
+        else
+        {
+          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+          return RESULT_INCREASE;
+        }
       }
 
       if (nextPacketDistance > requestingPacketPosition)
@@ -772,13 +808,33 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
         if ((brakePoint + requestingPacketSpeed + VEHICLE_LENGTH) >= nextBrakePoint)
         {
           // Must brake in order not to risk colliding
-          return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          // Gridlock prevention; yield on right-of-way in certain situations
+          if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+              == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+          {
+            return {.speedAction = BRAKE, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          }
+          else
+          {
+            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+            return RESULT_INCREASE;
+          }
         }
         else if ((brakePoint + requestingPacketSpeed + SPEEDUP_ACCELERATION + VEHICLE_LENGTH)
             >= std::max(0, nextBrakePoint - BRAKE_ACCELERATION))
         {
           // May not safely increase the speed
-          result = {.speedAction = MAINTAIN, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          // Gridlock prevention; yield on right-of-way in certain situations
+          if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+              == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+          {
+            result = {.speedAction = MAINTAIN, .blockedBy = nextPacketID, .physicallyBlocked = false};
+          }
+          else
+          {
+            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+            return RESULT_INCREASE;
+          }
         }
 
         // If yielding, see if the previous vehicle is also too close
@@ -817,7 +873,17 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
                 >= requestingPacketPosition)
             {
               // The other vehicle may have to brake for us. We can not have that.
-              return {.speedAction = BRAKE, .culprit = {NULL, 0, -1}, .timeSinceLastActionChange = 0, .blockedBy = hindPacketID, .physicallyBlocked = false};
+              // Gridlock prevention; yield on right-of-way in certain situations
+              if (nextPacket->mutableData.NOW().packetIDsToYieldFor.find(requestingPacket->id)
+                  == nextPacket->mutableData.NOW().packetIDsToYieldFor.end())
+              {
+                return {.speedAction = BRAKE, .blockedBy = hindPacketID, .physicallyBlocked = false};
+              }
+              else
+              {
+                std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
+                return RESULT_INCREASE;
+              }
             }
           }
         }
@@ -911,11 +977,108 @@ void Line::tick0()
     int previousSpeed = packet->mutableData.NOW().speed;
     int nextSpeed = previousSpeed;
 
+    std::set<unsigned int> packetIDsToYieldFor = packet->mutableData.NOW().packetIDsToYieldFor;
+
+    // Count the time passed in the same action.
+    int waitedTime = 0;
+    if (previousAction == nextAction)
+    {
+      waitedTime = packet->mutableData.NOW().waitedTime + 1;
+    }
+
+    unsigned int blockedByPacketID = nextSpeedActionInfo.blockedBy;
+    TransportNetworkPacket * blockedByPacket = p_transportNetwork->getPacket(blockedByPacketID);
+
+    // Packet has been stopped for some time. Are we gridlocked?
+    if (nextSpeed == 0
+        && (nextAction == BRAKE || nextAction == MAINTAIN)
+        && blockedByPacket != NULL
+//        && blockedByPacket->mutableData.NOW().line != this
+        && waitedTime >= 10)
+    {
+//      std::cout << "Packet " << packet->id << " searching for gridlock" << std::endl;
+      // We have already checked that we are at a complete stand-still,
+      // that we are indeed at an intersection (waiting for a separate line),
+      // and that some time has passed.
+      //
+      // We may consider chekcing if the blocker is in our direct forward path,
+      // but that is not completely thought through yet and may be a mistake.
+      // It may simply be too restrictive.
+      //
+      // We may want to limit our search depth as well, but for now waiting
+      // for a hard coded magic number of ticks before starting the search
+      // will probably suffice ("&& waitedTime >= N".)
+
+      TransportNetworkPacket * comingFromPacket = packet;
+      TransportNetworkPacket * goingToPacket = blockedByPacket;
+      unsigned int longestWaitCandidateID = UINT_MAX;
+      int longestWaitCandidateTime = 0;
+      std::set<unsigned int> visitedPacketIDs;
+
+      for (int timeout = waitedTime; timeout > 0; --timeout)
+      {
+        unsigned int goingToPacketID = comingFromPacket->mutableData.NOW().waitingFor;
+        goingToPacket = p_transportNetwork->getPacket(goingToPacketID);
+
+        // Stop searching if not blocked, or loop detected
+        if (goingToPacket == NULL || visitedPacketIDs.count(goingToPacketID))
+        {
+          break;
+        }
+
+        // Keep track of the longest waiting vehicle.
+        // Use ID for tie breaker.
+        int goingToTime = goingToPacket->mutableData.NOW().waitedTime;
+        bool physicallyBlocked = comingFromPacket->mutableData.NOW().physicallyBlocked;
+        if (!physicallyBlocked
+            && (goingToTime > longestWaitCandidateTime
+              || (goingToTime == longestWaitCandidateTime
+                && goingToPacketID < longestWaitCandidateID)))
+        {
+          longestWaitCandidateTime = goingToTime;
+          longestWaitCandidateID = goingToPacketID;
+        }
+
+        // If not back here at this point, continue
+        if (goingToPacketID != packet->id)
+        {
+          comingFromPacket = goingToPacket;
+          continue;
+        }
+
+        if (comingFromPacket->id == longestWaitCandidateID)
+        {
+          if (packetIDsToYieldFor.find(comingFromPacket->id)
+              == packetIDsToYieldFor.end())
+          {
+            std::cout << "Solvable loop detected, ID " << packet->id
+              << " yields for ID " << comingFromPacket->id << std::endl;
+            packetIDsToYieldFor.insert(comingFromPacket->id);
+          }
+          break;
+        }
+
+        // If we fall through all the way it means we did return to the
+        // original vehicle, but not from the longest waiter. In any case
+        // we are finished.
+        break;
+      }
+    }
+
+    // Delete all extraordinary yielding when the packet can move again,
+    // as that means the gridlock has now been solved.
+    if (nextAction != previousAction
+        && nextAction == INCREASE
+        && packetIDsToYieldFor.size())
+    {
+      packetIDsToYieldFor.clear();
+    }
+
     switch (nextAction)
     {
       case BRAKE:
         nextSpeed -= BRAKE_ACCELERATION;
-        if (nextSpeed < 0)
+        if (nextSpeed < 200)
         {
           nextSpeed = 0;
         }
@@ -933,6 +1096,8 @@ void Line::tick0()
 
     packet->mutableData.THEN() = packet->mutableData.NOW();
 
+    packet->mutableData.THEN().packetIDsToYieldFor = packetIDsToYieldFor;
+
     packet->mutableData.THEN().waitingFor = nextSpeedActionInfo.blockedBy;
     packet->mutableData.THEN().physicallyBlocked = nextSpeedActionInfo.physicallyBlocked;
     packet->mutableData.THEN().line = this;
@@ -941,6 +1106,8 @@ void Line::tick0()
     packet->mutableData.THEN().speed = nextSpeed;
     int nextPosition = distance + nextSpeed;
     packet->mutableData.THEN().positionAtLine = nextPosition;
+
+    packet->mutableData.THEN().waitedTime = waitedTime;
 
     if (nextPosition < m_length)
     {
@@ -971,188 +1138,6 @@ void Line::tick0()
       }
     }
   }
-
-#if 0
-  // Move all the vehicles
-  for (std::vector<VehicleInfo>::const_iterator it = _vehicles.NOW().cbegin();
-      it != _vehicles.NOW().cend(); ++it)
-  {
-    int vehicleIndex = std::distance(_vehicles.NOW().cbegin(), it);
-
-    VehicleInfo newVehicle = *it;
-
-    newVehicle.speedActionInfo = forwardGetSpeedAction(&newVehicle, this, vehicleIndex);
-
-    SpeedAction previousAction = it->speedActionInfo.speedAction;
-    SpeedAction thisAction = newVehicle.speedActionInfo.speedAction;
-
-    // Count the time passed in the same action.
-    if (previousAction == thisAction)
-    {
-      newVehicle.speedActionInfo.timeSinceLastActionChange = it->speedActionInfo.timeSinceLastActionChange + 1;
-    }
-
-    // Vehicle has been stopped for some time. Are we gridlocked?
-    if (newVehicle.speed == 0
-        && (thisAction == BRAKE || thisAction == MAINTAIN)
-        && newVehicle.speedActionInfo.culprit.line != this
-        && newVehicle.speedActionInfo.timeSinceLastActionChange >= 2)
-    {
-      // We have already checked that we are at a complete stand-still,
-      // that we are indeed at an intersection (waiting for a separate line),
-      // and that some time has passed.
-      //
-      // We may consider chekcing if the culprit is in our direct forward path,
-      // but that is not completely thought through yet and may be a mistake.
-      // It may simply be too restrictive.
-      //
-      // We may want to limit our search depth as well, but for now waiting
-      // for a hard coded magic number of ticks before starting the search
-      // will probably suffice.
-
-      SpeedActionInfo comingFromSpeedActionInfo = newVehicle.speedActionInfo;
-      SpeedActionInfo goingToSpeedActionInfo;
-      int thisVehicleId = newVehicle.id;
-      int comingFromId = thisVehicleId;
-      int longestWaitCandidateId = thisVehicleId;
-      int longestWaitCandidateTime = newVehicle.speedActionInfo.timeSinceLastActionChange;
-      std::set<int> visitedVehicleIds;
-
-      for (int timeout = newVehicle.speedActionInfo.timeSinceLastActionChange;
-          timeout > 0; --timeout)
-      {
-        // Break if not waiting
-        if (comingFromSpeedActionInfo.culprit.line == NULL)
-        {
-          break;
-        }
-
-        // FIXME WTF? Why does this even happen?
-        if (comingFromSpeedActionInfo.culprit.line->getVehicle(comingFromSpeedActionInfo.culprit.index) == NULL)
-        {
-          std::cout
-            << "Invalid index ("
-            << comingFromSpeedActionInfo.culprit.index
-            << ") for culprit."
-            << std::endl;
-          break;
-        }
-
-        VehicleInfo goingToVehicleInfo = *comingFromSpeedActionInfo.culprit.line->getVehicle(comingFromSpeedActionInfo.culprit.index);
-        goingToSpeedActionInfo = goingToVehicleInfo.speedActionInfo;
-
-        // Break if not waiting
-        if (goingToSpeedActionInfo.speedAction == INCREASE)
-        {
-          break;
-        }
-
-        // Check if looping (but not back to here), if so break
-        int goingToId = goingToVehicleInfo.id;
-        if (visitedVehicleIds.count(goingToId))
-        {
-          break;
-        }
-
-        // Keep track of the longest waiting vehicle.
-        // Use ID for tie breaker.
-        int goingToTime = goingToSpeedActionInfo.timeSinceLastActionChange;
-        if ((goingToTime > longestWaitCandidateTime)
-            || (goingToTime == longestWaitCandidateTime
-              && goingToId < longestWaitCandidateId))
-        {
-          longestWaitCandidateTime = goingToTime;
-          longestWaitCandidateId = goingToId;
-        }
-
-        // If not back here at this point, continue
-        if (goingToId != thisVehicleId)
-        {
-          comingFromId = goingToId;
-          comingFromSpeedActionInfo = goingToSpeedActionInfo;
-          continue;
-        }
-
-        else if (comingFromId == longestWaitCandidateId)
-        {
-          std::cout << "Solvable loop detected for ID " << comingFromId << std::endl;
-          newVehicle.vehiclesToYieldFor.insert(comingFromId);
-          break;
-        }
-
-        // If we fall through all the way it means we did return to the
-        // original vehicle, but not from the longest waiter. In any case
-        // we are finished.
-        break;
-      }
-
-      // TODO Use "vehiclesToYieldFor" in the backwards searches: Return
-      // INCREASE when the requestingVehicle is in the vehiclesToYieldFor list
-      // of the vehicle it should otherwise BRAKE or MAINTAIN for. (Not to be
-      // implemented here; implement in the appropriate searches.)
-    }
-
-    // Delete all extraordinary yielding when the vehicle can move again,
-    // as that means the gridlock has now been solved.
-    if (thisAction != previousAction
-        && thisAction == INCREASE
-        && newVehicle.vehiclesToYieldFor.size())
-    {
-      newVehicle.vehiclesToYieldFor.clear();
-    }
-
-    switch (thisAction)
-    {
-      case BRAKE:
-        newVehicle.speed -= BRAKE_ACCELERATION;
-        if (newVehicle.speed < 0)
-        {
-          newVehicle.speed = 0;
-        }
-        break;
-      case INCREASE:
-        newVehicle.speed += SPEEDUP_ACCELERATION;
-        if (newVehicle.speed > newVehicle.preferredSpeed)
-        {
-          newVehicle.speed = newVehicle.preferredSpeed;
-        }
-        break;
-      default:
-        break;
-    }
-
-    newVehicle.position += newVehicle.speed;
-    
-    if (newVehicle.position < m_length)
-    {
-      _vehicles.THEN().push_back(newVehicle);
-    }
-    else
-    {
-      // Move overflowing vehicles to next line
-      newVehicle.position -= m_length;
-      // Choose out line to put the vehicle based on vehicle route.
-      if (!m_out.empty())
-      {
-        Line * nextLine = newVehicle.getNextRoutePoint(this);
-        if (!nextLine)
-        {
-          if (!m_out.empty())
-          {
-            nextLine = m_out[rand() % m_out.size()];
-          }
-          else
-          {
-            std::cerr << "No route found for vehicle" << &newVehicle
-                      << " of line " << this << std::endl;
-            return;
-          }
-        }
-        nextLine->deliverVehicle(this, newVehicle);
-      }
-    }
-  }
-#endif
 }
 
 void Line::tick1()
@@ -1200,6 +1185,7 @@ void Line::draw()
 {
   // Draw the line
   glLineWidth(1.5);
+#if 0
   float red = 0.8;
   float green = 0.8;
   float blue = 1.0;
@@ -1219,6 +1205,7 @@ void Line::draw()
   glVertex3f(m_beginPoint.x, m_beginPoint.y, m_beginPoint.z);
   glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);
   glEnd();
+#endif
 
   float angle = std::atan2(m_endPoint.y - m_beginPoint.y, m_endPoint.x - m_beginPoint.x);
 
@@ -1233,7 +1220,7 @@ void Line::draw()
     return;
   }
 
-  // Draw based on transport network packets (new, keep)
+  // Draw transport network packets
   for (std::vector<unsigned int>::const_iterator it = _packets.NOW().cbegin();
       it != _packets.NOW().cend(); ++it)
   {
@@ -1270,10 +1257,24 @@ void Line::draw()
     switch (packet->mutableData.NOW().speedAction)
     {
       case BRAKE:
-        glColor3f(1.0f, 0.5f, 0.5f);
+        if (packet->mutableData.NOW().physicallyBlocked)
+        {
+          glColor3f(1.0f, 0.0f, 0.0f);
+        }
+        else
+        {
+          glColor3f(0.5f, 0.0f, 0.0f);
+        }
         break;
       case MAINTAIN:
-        glColor3f(1.0f, 1.0f, 0.5f);
+        if (packet->mutableData.NOW().physicallyBlocked)
+        {
+          glColor3f(1.0f, 1.0f, 0.0f);
+        }
+        else
+        {
+          glColor3f(0.5f, 0.5f, 0.0f);
+        }
         break;
       case INCREASE:
         glColor3f(0.5f, 1.0f, 0.5f);
@@ -1284,6 +1285,7 @@ void Line::draw()
 
     float pointerSize = SCALED_VEHICLE_HEIGHT * 0.25f;
 
+    // Draw speed action status
     glBegin(GL_TRIANGLE_FAN);
     glVertex3f(0.0f, 0.0f, SCALED_VEHICLE_HEIGHT * 3);
     glVertex3f( pointerSize,  pointerSize, SCALED_VEHICLE_HEIGHT * 2);
@@ -1294,6 +1296,7 @@ void Line::draw()
     glEnd();
     glPopMatrix();
 
+    // Draw line to waitingFor
     glColor3f(vehicle->color[0], vehicle->color[1], vehicle->color[2]);
 
     TransportNetworkPacket * culpritPacket = p_transportNetwork->getPacket(packet->mutableData.NOW().waitingFor);
@@ -1307,8 +1310,24 @@ void Line::draw()
       glEnd();
     }
 
-  }
+    // Draw lines to packets that are granted right-of-way
 
+    if (packet->mutableData.NOW().packetIDsToYieldFor.size())
+    {
+      glColor3f(0.0f, 1.0f, 0.0f);
+      for (std::set<unsigned int>::const_iterator it = packet->mutableData.NOW().packetIDsToYieldFor.cbegin();
+          it != packet->mutableData.NOW().packetIDsToYieldFor.cend(); ++it)
+      {
+        TransportNetworkPacket * rightOfWayPacket = p_transportNetwork->getPacket(*it);
+        Coordinates rightOfWayCoordinates = rightOfWayPacket->mutableData.NOW().line->coordinatesFromLineDistance(rightOfWayPacket->mutableData.NOW().positionAtLine);
+
+        glBegin(GL_LINES);
+        glVertex3f(vehicleCoordinates.x, vehicleCoordinates.y, vehicleCoordinates.z + SCALED_VEHICLE_HEIGHT);
+        glVertex3f(rightOfWayCoordinates.x, rightOfWayCoordinates.y, rightOfWayCoordinates.z);
+        glEnd();
+      }
+    }
+  }
 }
 
 void Line::moveRight(float distance)

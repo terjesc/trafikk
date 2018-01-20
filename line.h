@@ -8,7 +8,7 @@
 #include <queue>
 #include <unordered_map>
 
-const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 100000;
+const int AVERAGE_ROAD_LENGTH_PER_VEHICLE = 50000;
 const int MMPS_PER_KMPH = 278; // km/h to mm/s conversion factor
 const int SPEED = 30 * MMPS_PER_KMPH;
 const int VEHICLE_LENGTH = 4000;
@@ -29,20 +29,10 @@ enum SpeedAction
 
 class Line; // Forward declaration
 
-// TODO remove SpeedActionCulprit entirely?
-struct SpeedActionCulprit
-{
-  Line * line; // The line on which the culprit was seen.
-  int distance; // The spatial position of the culprit  on the line.
-  int index; // The ordered position of the culprit on the line.
-};
-
 struct SpeedActionInfo
 {
   SpeedAction speedAction; // What speed action to perform.
-  SpeedActionCulprit culprit; // TODO remove?
-  int timeSinceLastActionChange; // TODO remove; should be stored in packet instead
-  unsigned int blockedBy; // Index of the Transport Network Packet to yield for
+  unsigned int blockedBy; // ID of the Transport Network Packet to yield for
   bool physicallyBlocked; // Whether or not blockedBy physically blocks the path
 };
 
@@ -55,16 +45,14 @@ struct TransportNetworkPacketMutableData
 {
   int speed;
   int positionAtLine;
-
-  Line * line;     // For addressing; do we even need this?
-//  int indexInLine; // -"-
+  Line * line;
 
   SpeedAction speedAction;
-  int waitingFor;
+  unsigned int waitingFor;
   int waitedTime;
   bool physicallyBlocked;
 
-  std::set<unsigned int> packetIdsToYieldFor;
+  std::set<unsigned int> packetIDsToYieldFor;
   std::deque<Line *> route;
 
   void addRoutePoint(Line * line)
@@ -84,7 +72,7 @@ struct TransportNetworkPacketMutableData
 class TransportNetworkPacket
 {
   public:
-    int id;
+    unsigned int id;
     Vehicle * vehicle;
     int length;
     int preferredSpeed;
