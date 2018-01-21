@@ -507,9 +507,7 @@ SpeedActionInfo Line::backwardMergeGetSpeedAction(TransportNetworkPacket * reque
 {
   const SpeedActionInfo RESULT_INCREASE = {.speedAction = INCREASE, .blockedBy = INT_MAX, .physicallyBlocked = false};
 
-  // TODO FIXME remove the premature return
-  return RESULT_INCREASE;
-  // TODO FIXME remove the premature return
+  // TODO Implement gridlock prevention throughout the backward merge search
 
   // The search should have started with the requesting line,
   // so if we get back to the requesting line we can safely
@@ -672,7 +670,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
           }
           else
           {
-            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
             return RESULT_INCREASE;
           }
         }
@@ -737,7 +734,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
         }
         else
         {
-          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
           return RESULT_INCREASE;
         }
       }
@@ -753,7 +749,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
         }
         else
         {
-          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
           return RESULT_INCREASE;
         }
       }
@@ -792,7 +787,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
         }
         else
         {
-          std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
           return RESULT_INCREASE;
         }
       }
@@ -816,7 +810,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
           }
           else
           {
-            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
             return RESULT_INCREASE;
           }
         }
@@ -832,7 +825,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
           }
           else
           {
-            std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
             return RESULT_INCREASE;
           }
         }
@@ -881,7 +873,6 @@ SpeedActionInfo Line::backwardYieldGetSpeedAction(TransportNetworkPacket  * requ
               }
               else
               {
-                std::cout << "Giving right of way to packet " << requestingPacket->id << std::endl;
                 return RESULT_INCREASE;
               }
             }
@@ -994,7 +985,7 @@ void Line::tick0()
         && (nextAction == BRAKE || nextAction == MAINTAIN)
         && blockedByPacket != NULL
 //        && blockedByPacket->mutableData.NOW().line != this
-        && waitedTime >= 10)
+        && waitedTime >= 5)
     {
 //      std::cout << "Packet " << packet->id << " searching for gridlock" << std::endl;
       // We have already checked that we are at a complete stand-still,
@@ -1029,7 +1020,7 @@ void Line::tick0()
         // Keep track of the longest waiting vehicle.
         // Use ID for tie breaker.
         int goingToTime = goingToPacket->mutableData.NOW().waitedTime;
-        bool physicallyBlocked = comingFromPacket->mutableData.NOW().physicallyBlocked;
+        bool physicallyBlocked = goingToPacket->mutableData.NOW().physicallyBlocked;
         if (!physicallyBlocked
             && (goingToTime > longestWaitCandidateTime
               || (goingToTime == longestWaitCandidateTime
@@ -1051,8 +1042,6 @@ void Line::tick0()
           if (packetIDsToYieldFor.find(comingFromPacket->id)
               == packetIDsToYieldFor.end())
           {
-            std::cout << "Solvable loop detected, ID " << packet->id
-              << " yields for ID " << comingFromPacket->id << std::endl;
             packetIDsToYieldFor.insert(comingFromPacket->id);
           }
           break;
@@ -1185,7 +1174,6 @@ void Line::draw()
 {
   // Draw the line
   glLineWidth(1.5);
-#if 0
   float red = 0.8;
   float green = 0.8;
   float blue = 1.0;
@@ -1205,7 +1193,6 @@ void Line::draw()
   glVertex3f(m_beginPoint.x, m_beginPoint.y, m_beginPoint.z);
   glVertex3f(m_endPoint.x, m_endPoint.y, m_endPoint.z);
   glEnd();
-#endif
 
   float angle = std::atan2(m_endPoint.y - m_beginPoint.y, m_endPoint.x - m_beginPoint.x);
 
