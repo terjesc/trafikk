@@ -351,6 +351,7 @@ bool Line::deliverPacket(Line * senderLine, unsigned int packetId)
 
   if (positionAtLine >= 0 && positionAtLine < m_length)
   {
+    packet->mutableData.THEN().line = this;
     m_packetInboxes[senderLine].push_back(packetId);
     return true;
   }
@@ -359,7 +360,7 @@ bool Line::deliverPacket(Line * senderLine, unsigned int packetId)
     packet->mutableData.THEN().positionAtLine -= m_length;
     if (!packet->mutableData.THEN().route.empty())
     {
-      packet->mutableData.THEN().route.front()->deliverPacket(senderLine, packetId);
+      return packet->mutableData.THEN().route.front()->deliverPacket(senderLine, packetId);
     }
   }
 
@@ -1298,7 +1299,6 @@ void Line::draw()
     }
 
     // Draw lines to packets that are granted right-of-way
-
     if (packet->mutableData.NOW().packetIDsToYieldFor.size())
     {
       glColor3f(0.0f, 1.0f, 0.0f);
